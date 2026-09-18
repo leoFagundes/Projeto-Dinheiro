@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <rect width="200" height="200" rx="45" fill="#e8f5ec"/>
+  <defs>
+    <linearGradient id="gCoin" x1="40" y1="40" x2="160" y2="160" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#16a34a"/>
+      <stop offset="1" stop-color="#15803d"/>
+    </linearGradient>
+  </defs>
+  <circle cx="100" cy="100" r="62" fill="url(#gCoin)"/>
+  <circle cx="100" cy="100" r="52" fill="none" stroke="#15803d" stroke-width="2.5" opacity="0.3"/>
+  <text x="100" y="128" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Arial, sans-serif" font-weight="800" font-size="72" fill="#ffffff">$</text>
+</svg>

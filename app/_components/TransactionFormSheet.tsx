@@ -1,0 +1,373 @@
+"use client";
+
+import { useState } from "react";
+import { X } from "lucide-react";
+import { toast } from "sonner";
+import Link from "next/link";
+import { useTransactions } from "@/lib/use-transactions";
+import { useCategories } from "@/lib/use-categories";
+import { useBanks } from "@/lib/use-banks";
+import { formatCurrency, todayIsoDate } from "@/lib/format";
+import { FALLBACK_CATEGORY_ICON } from "@/lib/categories";
+import { BottomSheet } from "./BottomSheet";
+import type { FormaPagamento, Transaction, TransactionType } from "@/lib/types";
+
+export function TransactionFormSheet({
+  open,
+  onClose,
+  transaction,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** Quando presente, o formulário edita esta transação em vez de criar uma nova. */
+  transaction?: Transaction;
+}) {
+  return (
+    <BottomSheet open={open} onClose={onClose}>
+      <TransactionFormFields
+        key={transaction?.id ?? "create"}
+        transaction={transaction}
+        onClose={onClose}
+      />
+    </BottomSheet>
+  );
+}
+
+function TransactionFormFields({
+  transaction,
+  onClose,
+}: {
+  transaction?: Transaction;
+  onClose: () => void;
+}) {
+  const { addTransaction, addInstallmentPurchase, updateTransaction } = useTransactions();
+  const { byType: categoriesByType } = useCategories();
+  const { banks } = useBanks();
+  const [submitting, setSubmitting] = useState(false);
+
+  const isEditing = transaction !== undefined;
+  const isRecurringChild = isEditing && Boolean(transaction?.recorrenteOrigemId);
+
+  const [tipo, setTipo] = useState<TransactionType>(transaction?.tipo ?? "despesa");
+  const [valor, setValor] = useState(transaction ? String(transaction.valor) : "");
+  const [categoriaEscolhida, setCategoriaEscolhida] = useState(transaction?.categoria ?? "");
+  const [bancoId, setBancoId] = useState(transaction?.bancoId ?? "");
+  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>(
+    transaction?.formaPagamento ?? "credito",
+  );
+  const [descricao, setDescricao] = useState(transaction?.descricao ?? "");
+  const [data, setData] = useState(transaction?.data ?? todayIsoDate());
+  const [recorrente, setRecorrente] = useState(transaction?.recorrente ?? false);
+  const [parcelar, setParcelar] = useState(false);
+  const [numParcelas, setNumParcelas] = useState("2");
+
+  const categoriaOptions = categoriesByType(tipo);
+  // Deriva a categoria efetivamente selecionada em vez de sincronizar via
+  // efeito: se a escolha anterior não existe mais nesta lista, cai na primeira.
+  const categoria = categoriaOptions.some((c) => c.nome === categoriaEscolhida)
+    ? categoriaEscolhida
+    : categoriaOptions[0]?.nome ?? "";
+
+  // Parcelamento só faz sentido para uma despesa nova, no crédito, vinculada a um banco.
+  const podeParcelar =
+    !isEditing && tipo === "despesa" && bancoId !== "" && formaPagamento === "credito";
+  const parsedValor = Number(valor.replace(",", "."));
+  const parcelasCount = Math.min(24, Math.max(2, Math.round(Number(numParcelas)) || 2));
+
+  function changeTipo(next: TransactionType) {
+    setTipo(next);
+    if (next !== "despesa") {
+      setBancoId("");
+      setParcelar(false);
+    }
+  }
+
+  function changeBanco(next: string) {
+    setBancoId(next);
+    if (!next) setParcelar(false);
+  }
+
+  function changeFormaPagamento(next: FormaPagamento) {
+    setFormaPagamento(next);
+    if (next === "debito") setParcelar(false);
+  }
+
+  function resetForm() {
+    setValor("");
+    setDescricao("");
+    setData(todayIsoDate());
+    setRecorrente(false);
+    setParcelar(false);
+    setNumParcelas("2");
+    setFormaPagamento("credito");
+  }
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!parsedValor || parsedValor <= 0) {
+      toast.error("Informe um valor válido.");
+      return;
+    }
+    if (!descricao.trim()) {
+      toast.error("Informe uma descrição.");
+      return;
+    }
+    if (!categoria) {
+      toast.error("Cadastre uma categoria antes de continuar.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      if (transaction) {
+        await updateTransaction(transaction.id, {
+          valor: parsedValor,
+          tipo,
+          categoria,
+          descricao: descricao.trim(),
+          data,
+          recorrente,
+          ...(tipo === "despesa" && bancoId ? { bancoId, formaPagamento } : {}),
+        });
+        toast.success("Transação atualizada.");
+      } else if (podeParcelar && parcelar) {
+        await addInstallmentPurchase(
+          { valorTotal: parsedValor, categoria, descricao: descricao.trim(), data, bancoId },
+          parcelasCount,
+        );
+        toast.success(`Compra parcelada em ${parcelasCount}x.`);
+      } else {
+        await addTransaction({
+          valor: parsedValor,
+          tipo,
+          categoria,
+          descricao: descricao.trim(),
+          data,
+          recorrente,
+          ...(tipo === "despesa" && bancoId ? { bancoId, formaPagamento } : {}),
+        });
+        toast.success("Transação adicionada.");
+      }
+      resetForm();
+      onClose();
+    } catch {
+      toast.error("Não foi possível salvar a transação.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleStopRecurring() {
+    if (!transaction) return;
+    const templateId = transaction.recorrenteOrigemId ?? transaction.id;
+    try {
+      await updateTransaction(templateId, { recorrente: false });
+      toast.success("Recorrência cancelada — os próximos meses não geram mais esta transação.");
+      onClose();
+    } catch {
+      toast.error("Não foi possível cancelar a recorrência.");
+    }
+  }
+
+  return (
+    <>
+      <div className="mb-4 flex items-center justify-between">
+        <p className="font-medium">{isEditing ? "Editar transação" : "Nova transação"}</p>
+        <button
+          onClick={onClose}
+          className="text-ink-muted transition-transform active:scale-90 hover:text-ink"
+          aria-label="Fechar"
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => changeTipo("despesa")}
+            className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+              tipo === "despesa"
+                ? "border-negative bg-negative-soft text-negative"
+                : "border-border text-ink-muted"
+            }`}
+          >
+            Despesa
+          </button>
+          <button
+            type="button"
+            onClick={() => changeTipo("receita")}
+            className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+              tipo === "receita"
+                ? "border-accent bg-accent-soft text-accent-strong"
+                : "border-border text-ink-muted"
+            }`}
+          >
+            Receita
+          </button>
+        </div>
+
+        <input
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min="0"
+          placeholder="R$ 0,00"
+          value={valor}
+          onChange={(event) => setValor(event.target.value)}
+          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        />
+
+        <input
+          type="text"
+          placeholder="Descrição"
+          value={descricao}
+          onChange={(event) => setDescricao(event.target.value)}
+          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        />
+
+        {categoriaOptions.length > 0 ? (
+          <select
+            value={categoria}
+            onChange={(event) => setCategoriaEscolhida(event.target.value)}
+            className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          >
+            {categoriaOptions.map((option) => (
+              <option key={option.id} value={option.nome}>
+                {option.icone ?? FALLBACK_CATEGORY_ICON} {option.nome}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <Link
+            href="/configuracoes"
+            onClick={onClose}
+            className="rounded-2xl border border-dashed border-border px-4 py-3 text-sm text-ink-muted hover:text-accent-strong"
+          >
+            Nenhuma categoria de {tipo} ainda — toque para criar uma
+          </Link>
+        )}
+
+        {tipo === "despesa" && banks.length > 0 && (
+          <select
+            value={bancoId}
+            onChange={(event) => changeBanco(event.target.value)}
+            className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          >
+            <option value="">Sem banco vinculado</option>
+            {banks.map((banco) => (
+              <option key={banco.id} value={banco.id}>
+                {banco.nome}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {tipo === "despesa" && bancoId !== "" && (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => changeFormaPagamento("credito")}
+              className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+                formaPagamento === "credito"
+                  ? "border-accent bg-accent-soft text-accent-strong"
+                  : "border-border text-ink-muted"
+              }`}
+            >
+              Crédito
+            </button>
+            <button
+              type="button"
+              onClick={() => changeFormaPagamento("debito")}
+              className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+                formaPagamento === "debito"
+                  ? "border-accent bg-accent-soft text-accent-strong"
+                  : "border-border text-ink-muted"
+              }`}
+            >
+              Débito
+            </button>
+          </div>
+        )}
+
+        {podeParcelar && (
+          <div className="rounded-2xl bg-bg px-4 py-3">
+            <label className="flex items-center gap-2 text-sm text-ink-muted">
+              <input
+                type="checkbox"
+                checked={parcelar}
+                onChange={(event) => setParcelar(event.target.checked)}
+                className="size-4 accent-accent"
+              />
+              Parcelar essa compra
+            </label>
+            {parcelar && (
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <input
+                  type="number"
+                  min="2"
+                  max="24"
+                  value={numParcelas}
+                  onChange={(event) => setNumParcelas(event.target.value)}
+                  className="w-20 rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none transition-colors focus:border-accent"
+                />
+                <span className="text-xs text-ink-muted">
+                  {parcelasCount}x de{" "}
+                  {parsedValor > 0
+                    ? formatCurrency(parsedValor / parcelasCount)
+                    : "R$ 0,00"}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        <input
+          type="date"
+          value={data}
+          onChange={(event) => setData(event.target.value)}
+          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        />
+
+        {transaction?.parcelaTotal && (
+          <p className="rounded-2xl bg-bg px-4 py-3 text-sm text-ink-muted">
+            Parcela {transaction.parcelaAtual}/{transaction.parcelaTotal} de uma compra
+            parcelada. Para cancelar as próximas, exclua-as individualmente no histórico.
+          </p>
+        )}
+
+        {parcelar ? null : isRecurringChild ? (
+          <div className="flex items-center justify-between rounded-2xl bg-bg px-4 py-3 text-sm text-ink-muted">
+            Parte de uma recorrência
+            <button
+              type="button"
+              onClick={handleStopRecurring}
+              className="text-negative transition-transform active:scale-95 hover:underline"
+            >
+              Parar repetição
+            </button>
+          </div>
+        ) : (
+          <label className="flex items-center gap-2 py-1 text-sm text-ink-muted">
+            <input
+              type="checkbox"
+              checked={recorrente}
+              onChange={(event) => setRecorrente(event.target.checked)}
+              className="size-4 accent-accent"
+            />
+            Repetir todo mês
+          </label>
+        )}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="mt-1 rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60"
+        >
+          {isEditing ? "Salvar alterações" : "Salvar"}
+        </button>
+      </form>
+    </>
+  );
+}
