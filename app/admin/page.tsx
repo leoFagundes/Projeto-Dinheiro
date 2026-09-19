@@ -14,8 +14,33 @@ export default async function AdminPage() {
     redirect("/admin/login");
   }
 
-  const { users: authUsers } = await getAdminAuth().listUsers(1000);
-  const db = getAdminFirestore();
+  let authUsers;
+  let db;
+  try {
+    authUsers = (await getAdminAuth().listUsers(1000)).users;
+    db = getAdminFirestore();
+  } catch (error) {
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-4 px-5 py-8">
+        <h1 className="text-lg font-semibold">Usuários</h1>
+        <p className="rounded-card bg-negative-soft p-4 text-sm text-negative">
+          Não foi possível conectar ao Firebase Admin. Confira{" "}
+          <code>FIREBASE_ADMIN_CLIENT_EMAIL</code> e <code>FIREBASE_ADMIN_PRIVATE_KEY</code> nas
+          variáveis de ambiente — e, se acabou de configurá-las, lembre de fazer um novo deploy
+          (variáveis novas só valem a partir do próximo deploy).
+          <br />
+          <span className="text-xs text-ink-muted">
+            {error instanceof Error ? error.message : String(error)}
+          </span>
+        </p>
+        <form action={adminLogout}>
+          <button type="submit" className="text-sm text-ink-muted hover:text-negative">
+            Sair
+          </button>
+        </form>
+      </main>
+    );
+  }
 
   // Resumo de uso a partir das transações — não usa orderBy pra não depender
   // de um índice composto que este projeto nunca precisou até aqui.

@@ -17,6 +17,13 @@ export async function adminLogin(
   _prevState: AdminLoginState,
   formData: FormData,
 ): Promise<AdminLoginState> {
+  if (!process.env.ADMIN_PASSWORD || !process.env.ADMIN_SESSION_SECRET) {
+    return {
+      error:
+        "Configuração do servidor incompleta: ADMIN_PASSWORD ou ADMIN_SESSION_SECRET não estão definidos nesse ambiente. Se acabou de configurar no Vercel, falta fazer um redeploy.",
+    };
+  }
+
   const password = formData.get("password");
 
   if (typeof password !== "string" || password !== process.env.ADMIN_PASSWORD) {
