@@ -63,7 +63,11 @@ export function useTransactions() {
     [user],
   );
 
-  /** Cria uma compra parcelada: divide o valor total em N despesas, uma por mês. */
+  /**
+   * Cria uma compra parcelada: divide o valor total em N parcelas, uma por mês.
+   * `startFrom` permite registrar uma compra que já está em andamento, gerando
+   * só as parcelas a partir desse número (útil ao migrar dívidas existentes).
+   */
   const addInstallmentPurchase = useCallback(
     async (
       input: {
@@ -74,15 +78,18 @@ export function useTransactions() {
         bancoId?: string;
       },
       numParcelas: number,
+      startFrom: number = 1,
     ) => {
       if (!user) return;
       const valores = splitInstallments(input.valorTotal, numParcelas);
       const compraId = crypto.randomUUID();
       const baseMonth = monthKeyOfIsoDate(input.data);
       const originalDay = Number(input.data.slice(8, 10));
+      const remaining = valores.slice(startFrom - 1);
 
       await Promise.all(
-        valores.map((valor, index) => {
+        remaining.map((valor, index) => {
+          const parcelaAtual = startFrom + index;
           const monthKey = addMonthsToKey(baseMonth, index);
           const day = clampDayToMonth(monthKey, originalDay);
           return addDoc(collection(db, COLLECTION), {
@@ -94,7 +101,7 @@ export function useTransactions() {
             data: `${monthKey}-${day}`,
             recorrente: false,
             compraId,
-            parcelaAtual: index + 1,
+            parcelaAtual,
             parcelaTotal: numParcelas,
             ...(input.bancoId ? { bancoId: input.bancoId, formaPagamento: "credito" } : {}),
             criadoEm: Date.now(),
@@ -116,6 +123,17 @@ export function useTransactions() {
     await deleteDoc(doc(db, COLLECTION, id));
   }, []);
 
+  /** Exclui esta e todas as próximas parcelas da mesma compra parcelada. */
+  const cancelRemainingInstallments = useCallback(
+    async (compraId: string, fromParcela: number) => {
+      const toDelete = transactions.filter(
+        (t) => t.compraId === compraId && (t.parcelaAtual ?? 0) >= fromParcela,
+      );
+      await Promise.all(toDelete.map((t) => deleteDoc(doc(db, COLLECTION, t.id))));
+    },
+    [transactions],
+  );
+
   // O app não tem backend agendado, então cada template recorrente ganha sua
   // instância do mês atual assim que o usuário abre o app, uma vez por sessão.
   useEffect(() => {
@@ -129,6 +147,7 @@ export function useTransactions() {
 
     for (const template of templates) {
       if (monthKeyOfIsoDate(template.data) === thisMonth) continue;
+      if (template.recorrenteFim && thisMonth > template.recorrenteFim) continue;
 
       const alreadyExists = transactions.some(
         (t) =>
@@ -162,5 +181,6 @@ export function useTransactions() {
     addInstallmentPurchase,
     updateTransaction,
     deleteTransaction,
+    cancelRemainingInstallments,
   };
 }

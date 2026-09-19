@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Landmark } from "lucide-react";
 import { EmptyState } from "@/app/_components/EmptyState";
 import { BottomSheet } from "@/app/_components/BottomSheet";
+import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import { formatCurrency } from "@/lib/format";
 import type { Bank } from "@/lib/types";
 
@@ -86,26 +87,25 @@ function AdjustDebtSheet({
   onClose: () => void;
 }) {
   const [modo, setModo] = useState<"divida" | "pagamento">("divida");
-  const [valor, setValor] = useState("");
+  const [valor, setValor] = useState(0);
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     if (!banco) return;
-    const parsed = Number(valor.replace(",", "."));
-    if (!parsed || parsed <= 0) {
+    if (!valor || valor <= 0) {
       toast.error("Informe um valor válido.");
       return;
     }
-    if (modo === "pagamento" && parsed > banco.saldoDevedor) {
+    if (modo === "pagamento" && valor > banco.saldoDevedor) {
       toast.error("O valor é maior que o saldo anterior.");
       return;
     }
 
     setSaving(true);
     try {
-      await onAdjust(banco.id, modo === "divida" ? parsed : -parsed);
+      await onAdjust(banco.id, modo === "divida" ? valor : -valor);
       toast.success(modo === "divida" ? "Saldo anterior atualizado." : "Pagamento registrado.");
-      setValor("");
+      setValor(0);
       setModo("divida");
       onClose();
     } catch {
@@ -149,14 +149,9 @@ function AdjustDebtSheet({
         </button>
       </div>
 
-      <input
-        type="number"
-        inputMode="decimal"
-        step="0.01"
-        min="0"
-        placeholder="R$ 0,00"
+      <CurrencyInput
         value={valor}
-        onChange={(event) => setValor(event.target.value)}
+        onChange={setValor}
         className="mt-3 w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
       />
 

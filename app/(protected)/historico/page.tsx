@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Download, Receipt } from "lucide-react";
+import { Download, Receipt, Search, X } from "lucide-react";
 import { useTransactions } from "@/lib/use-transactions";
 import { useCategories } from "@/lib/use-categories";
 import { useBanks } from "@/lib/use-banks";
@@ -23,6 +23,7 @@ export default function HistoricoPage() {
   const { banks } = useBanks();
   const { pockets } = usePockets();
   const [monthKey, setMonthKey] = useState(currentMonthKey());
+  const [busca, setBusca] = useState("");
 
   if (loading) {
     return (
@@ -33,6 +34,17 @@ export default function HistoricoPage() {
     );
   }
 
+  const termo = busca.trim().toLowerCase();
+  const buscando = termo !== "";
+
+  const resultadosBusca = buscando
+    ? transactions.filter(
+        (t) =>
+          t.descricao.toLowerCase().includes(termo) ||
+          t.categoria.toLowerCase().includes(termo),
+      )
+    : [];
+
   const monthTransactions = transactions.filter(
     (t) => monthKeyOfIsoDate(t.data) === monthKey,
   );
@@ -40,6 +52,8 @@ export default function HistoricoPage() {
   const colorByCategoria = assignCategoryColors(categories);
   const iconByCategoria = mapCategoryIcons(categories);
   const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
+
+  const listaExibida = buscando ? resultadosBusca : monthTransactions;
 
   return (
     <PageFade>
@@ -55,52 +69,81 @@ export default function HistoricoPage() {
           </button>
         </div>
 
-        <MonthFilter monthKey={monthKey} onChange={setMonthKey} />
+        <div className="relative">
+          <Search
+            size={16}
+            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-muted"
+          />
+          <input
+            type="text"
+            placeholder="Buscar por descrição ou categoria"
+            value={busca}
+            onChange={(event) => setBusca(event.target.value)}
+            className="w-full rounded-2xl border border-border bg-surface py-2.5 pl-10 pr-9 text-sm outline-none transition-colors focus:border-accent"
+          />
+          {buscando && (
+            <button
+              onClick={() => setBusca("")}
+              aria-label="Limpar busca"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
+        {!buscando && <MonthFilter monthKey={monthKey} onChange={setMonthKey} />}
 
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={monthKey}
+            key={buscando ? `busca-${termo}` : monthKey}
             initial={{ opacity: 0, x: 8 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -8 }}
             transition={{ duration: 0.16 }}
             className="flex flex-col gap-4"
           >
-            <div className="grid grid-cols-3 gap-2 rounded-card bg-surface p-4 text-center">
-              <div>
-                <p className="text-xs text-ink-muted">Receitas</p>
-                <p className="mt-0.5 text-sm font-semibold text-accent-strong">
-                  {formatCurrency(receitas)}
-                </p>
+            {!buscando && (
+              <div className="grid grid-cols-3 gap-2 rounded-card bg-surface p-4 text-center">
+                <div>
+                  <p className="text-xs text-ink-muted">Receitas</p>
+                  <p className="mt-0.5 text-sm font-semibold text-accent-strong">
+                    {formatCurrency(receitas)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-ink-muted">Despesas</p>
+                  <p className="mt-0.5 text-sm font-semibold text-negative">
+                    {formatCurrency(despesas)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-ink-muted">Saldo</p>
+                  <p
+                    className={`mt-0.5 text-sm font-semibold ${
+                      saldoMes < 0 ? "text-negative" : "text-accent-strong"
+                    }`}
+                  >
+                    {formatCurrency(saldoMes)}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-ink-muted">Despesas</p>
-                <p className="mt-0.5 text-sm font-semibold text-negative">
-                  {formatCurrency(despesas)}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-ink-muted">Saldo</p>
-                <p
-                  className={`mt-0.5 text-sm font-semibold ${
-                    saldoMes < 0 ? "text-negative" : "text-accent-strong"
-                  }`}
-                >
-                  {formatCurrency(saldoMes)}
-                </p>
-              </div>
-            </div>
+            )}
 
-            {monthTransactions.length === 0 ? (
+            {listaExibida.length === 0 ? (
               <EmptyState
-                icon={Receipt}
-                title="Nada por aqui"
-                description="Nenhuma transação registrada neste mês."
+                icon={buscando ? Search : Receipt}
+                title={buscando ? "Nada encontrado" : "Nada por aqui"}
+                description={
+                  buscando
+                    ? "Nenhuma transação corresponde a essa busca."
+                    : "Nenhuma transação registrada neste mês."
+                }
               />
             ) : (
               <div className="flex flex-col gap-2">
                 <AnimatePresence initial={false}>
-                  {monthTransactions.map((transaction) => (
+                  {listaExibida.map((transaction) => (
                     <TransactionListItem
                       key={transaction.id}
                       transaction={transaction}

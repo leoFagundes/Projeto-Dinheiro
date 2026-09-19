@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
+import { useDismissable } from "@/lib/use-dismissable";
 
 export function BottomSheet({
   open,
@@ -11,6 +12,8 @@ export function BottomSheet({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  useDismissable(open, onClose);
+
   return (
     <AnimatePresence>
       {open && (

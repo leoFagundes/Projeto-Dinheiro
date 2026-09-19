@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
+import { useDismissable } from "@/lib/use-dismissable";
 
 export function ConfirmDialog({
   open,
@@ -19,6 +20,8 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  useDismissable(open, onCancel);
+
   return (
     <AnimatePresence>
       {open && (

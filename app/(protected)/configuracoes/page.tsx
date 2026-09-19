@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Landmark, LogOut, Pencil, PiggyBank, Plus, Tags, Trash2 } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Landmark,
+  LogOut,
+  Pencil,
+  PiggyBank,
+  Plus,
+  Tags,
+  Trash2,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useCategories } from "@/lib/use-categories";
 import { useBanks } from "@/lib/use-banks";
@@ -13,7 +22,8 @@ import { PageFade } from "@/app/_components/PageFade";
 import { ConfirmDialog } from "@/app/_components/ConfirmDialog";
 import { EmojiPickerSheet } from "@/app/_components/EmojiPickerSheet";
 import { BottomSheet } from "@/app/_components/BottomSheet";
-import type { Bank, TransactionType } from "@/lib/types";
+import { CurrencyInput } from "@/app/_components/CurrencyInput";
+import type { Bank, Category, Pocket, TransactionType } from "@/lib/types";
 
 export default function ConfiguracoesPage() {
   return (
@@ -50,12 +60,13 @@ function SectionCard({
 }
 
 function CategoriasSection() {
-  const { categories, addCategory, removeCategory } = useCategories();
+  const { categories, addCategory, removeCategory, updateCategory } = useCategories();
   const [nome, setNome] = useState("");
   const [tipo, setTipo] = useState<TransactionType>("despesa");
   const [icone, setIcone] = useState(FALLBACK_CATEGORY_ICON);
   const [pickingIcon, setPickingIcon] = useState(false);
   const [removing, setRemoving] = useState<{ id: string; nome: string } | null>(null);
+  const [editing, setEditing] = useState<Category | null>(null);
 
   async function handleAdd(event: React.FormEvent) {
     event.preventDefault();
@@ -126,13 +137,22 @@ function CategoriasSection() {
                   <span>{c.icone ?? FALLBACK_CATEGORY_ICON}</span>
                   {c.nome}
                 </span>
-                <button
-                  onClick={() => setRemoving({ id: c.id, nome: c.nome })}
-                  className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
-                  aria-label="Remover categoria"
-                >
-                  <Trash2 size={14} />
-                </button>
+                <span className="flex items-center gap-2.5">
+                  <button
+                    onClick={() => setEditing(c)}
+                    className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
+                    aria-label="Editar categoria"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={() => setRemoving({ id: c.id, nome: c.nome })}
+                    className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
+                    aria-label="Remover categoria"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </span>
               </li>
             ))}
           </ul>
@@ -149,13 +169,22 @@ function CategoriasSection() {
                   <span>{c.icone ?? FALLBACK_CATEGORY_ICON}</span>
                   {c.nome}
                 </span>
-                <button
-                  onClick={() => setRemoving({ id: c.id, nome: c.nome })}
-                  className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
-                  aria-label="Remover categoria"
-                >
-                  <Trash2 size={14} />
-                </button>
+                <span className="flex items-center gap-2.5">
+                  <button
+                    onClick={() => setEditing(c)}
+                    className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
+                    aria-label="Editar categoria"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={() => setRemoving({ id: c.id, nome: c.nome })}
+                    className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
+                    aria-label="Remover categoria"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </span>
               </li>
             ))}
           </ul>
@@ -176,14 +205,111 @@ function CategoriasSection() {
         }}
         onCancel={() => setRemoving(null)}
       />
+
+      <EditCategorySheet
+        categoria={editing}
+        onSave={updateCategory}
+        onClose={() => setEditing(null)}
+      />
     </SectionCard>
+  );
+}
+
+function EditCategorySheet({
+  categoria,
+  onSave,
+  onClose,
+}: {
+  categoria: Category | null;
+  onSave: (id: string, input: { nome: string; icone: string }) => Promise<void>;
+  onClose: () => void;
+}) {
+  return (
+    <BottomSheet open={categoria !== null} onClose={onClose}>
+      {categoria && (
+        <EditCategoryFields
+          key={categoria.id}
+          categoria={categoria}
+          onSave={onSave}
+          onClose={onClose}
+        />
+      )}
+    </BottomSheet>
+  );
+}
+
+function EditCategoryFields({
+  categoria,
+  onSave,
+  onClose,
+}: {
+  categoria: Category;
+  onSave: (id: string, input: { nome: string; icone: string }) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [nome, setNome] = useState(categoria.nome);
+  const [icone, setIcone] = useState(categoria.icone ?? FALLBACK_CATEGORY_ICON);
+  const [pickingIcon, setPickingIcon] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    if (!nome.trim()) {
+      toast.error("Dê um nome para a categoria.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(categoria.id, { nome: nome.trim(), icone });
+      toast.success("Categoria atualizada.");
+      onClose();
+    } catch {
+      toast.error("Não foi possível atualizar a categoria.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <p className="mb-4 font-medium">Editar categoria</p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setPickingIcon(true)}
+          aria-label="Escolher ícone"
+          className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-border bg-bg text-lg transition-transform active:scale-95"
+        >
+          {icone}
+        </button>
+        <input
+          type="text"
+          placeholder="Nome da categoria"
+          value={nome}
+          onChange={(event) => setNome(event.target.value)}
+          className="min-w-0 flex-1 rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        />
+      </div>
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="mt-3 w-full rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60"
+      >
+        Salvar
+      </button>
+
+      <EmojiPickerSheet
+        open={pickingIcon}
+        onClose={() => setPickingIcon(false)}
+        onSelect={setIcone}
+      />
+    </>
   );
 }
 
 function BancosSection() {
   const { banks, addBank, updateBank, removeBank } = useBanks();
   const [nome, setNome] = useState("");
-  const [saldoDevedor, setSaldoDevedor] = useState("");
+  const [saldoDevedor, setSaldoDevedor] = useState(0);
   const [removing, setRemoving] = useState<{ id: string; nome: string } | null>(null);
   const [editing, setEditing] = useState<Bank | null>(null);
 
@@ -193,10 +319,10 @@ function BancosSection() {
       toast.error("Dê um nome para o banco.");
       return;
     }
-    await addBank(nome.trim(), Number(saldoDevedor.replace(",", ".")) || 0);
+    await addBank(nome.trim(), saldoDevedor);
     toast.success("Banco criado.");
     setNome("");
-    setSaldoDevedor("");
+    setSaldoDevedor(0);
   }
 
   return (
@@ -209,14 +335,10 @@ function BancosSection() {
           onChange={(event) => setNome(event.target.value)}
           className="min-w-0 flex-1 rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
         />
-        <input
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min="0"
-          placeholder="Saldo anterior"
+        <CurrencyInput
           value={saldoDevedor}
-          onChange={(event) => setSaldoDevedor(event.target.value)}
+          onChange={setSaldoDevedor}
+          placeholder="Saldo anterior"
           className="w-32 rounded-2xl border border-border bg-bg px-3 py-2.5 text-sm outline-none transition-colors focus:border-accent"
         />
         <button
@@ -310,7 +432,7 @@ function EditBankFields({
   onClose: () => void;
 }) {
   const [nome, setNome] = useState(banco.nome);
-  const [saldoDevedor, setSaldoDevedor] = useState(String(banco.saldoDevedor));
+  const [saldoDevedor, setSaldoDevedor] = useState(banco.saldoDevedor);
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -320,10 +442,7 @@ function EditBankFields({
     }
     setSaving(true);
     try {
-      await onSave(banco.id, {
-        nome: nome.trim(),
-        saldoDevedor: Number(saldoDevedor.replace(",", ".")) || 0,
-      });
+      await onSave(banco.id, { nome: nome.trim(), saldoDevedor });
       toast.success("Banco atualizado.");
       onClose();
     } catch {
@@ -344,14 +463,10 @@ function EditBankFields({
           onChange={(event) => setNome(event.target.value)}
           className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
         />
-        <input
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min="0"
-          placeholder="Saldo anterior"
+        <CurrencyInput
           value={saldoDevedor}
-          onChange={(event) => setSaldoDevedor(event.target.value)}
+          onChange={setSaldoDevedor}
+          placeholder="Saldo anterior"
           className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
         />
         <button
@@ -367,10 +482,14 @@ function EditBankFields({
 }
 
 function CaixinhasSection() {
-  const { pockets, addPocket, removePocket } = usePockets();
+  const { pockets, addPocket, updatePocket, removePocket, transferBetweenPockets } =
+    usePockets();
   const [nome, setNome] = useState("");
-  const [saldoInicial, setSaldoInicial] = useState("");
+  const [saldoInicial, setSaldoInicial] = useState(0);
+  const [metaValor, setMetaValor] = useState(0);
   const [removing, setRemoving] = useState<{ id: string; nome: string } | null>(null);
+  const [editing, setEditing] = useState<Pocket | null>(null);
+  const [transferring, setTransferring] = useState(false);
 
   async function handleAdd(event: React.FormEvent) {
     event.preventDefault();
@@ -378,62 +497,91 @@ function CaixinhasSection() {
       toast.error("Dê um nome para a caixinha.");
       return;
     }
-    await addPocket(nome.trim(), Number(saldoInicial.replace(",", ".")) || 0);
+    await addPocket(nome.trim(), saldoInicial, metaValor || undefined);
     toast.success("Caixinha criada.");
     setNome("");
-    setSaldoInicial("");
+    setSaldoInicial(0);
+    setMetaValor(0);
   }
 
   return (
     <SectionCard icon={PiggyBank} title="Caixinhas">
-      <form onSubmit={handleAdd} className="mb-4 flex flex-wrap gap-2">
+      <form onSubmit={handleAdd} className="mb-4 flex flex-col gap-2">
         <input
           type="text"
           placeholder="Nome (ex: Reserva, Viagem)"
           value={nome}
           onChange={(event) => setNome(event.target.value)}
-          className="min-w-0 flex-1 rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+          className="rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
         />
-        <input
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min="0"
-          placeholder="Saldo inicial"
-          value={saldoInicial}
-          onChange={(event) => setSaldoInicial(event.target.value)}
-          className="w-32 rounded-2xl border border-border bg-bg px-3 py-2.5 text-sm outline-none transition-colors focus:border-accent"
-        />
-        <button
-          type="submit"
-          className="flex items-center justify-center rounded-2xl bg-accent px-3 text-white transition-transform active:scale-95 hover:bg-accent-strong"
-          aria-label="Adicionar caixinha"
-        >
-          <Plus size={18} />
-        </button>
+        <div className="flex gap-2">
+          <CurrencyInput
+            value={saldoInicial}
+            onChange={setSaldoInicial}
+            placeholder="Saldo inicial"
+            className="min-w-0 flex-1 rounded-2xl border border-border bg-bg px-3 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+          />
+          <CurrencyInput
+            value={metaValor}
+            onChange={setMetaValor}
+            placeholder="Meta (opcional)"
+            className="min-w-0 flex-1 rounded-2xl border border-border bg-bg px-3 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+          />
+          <button
+            type="submit"
+            className="flex items-center justify-center rounded-2xl bg-accent px-3 text-white transition-transform active:scale-95 hover:bg-accent-strong"
+            aria-label="Adicionar caixinha"
+          >
+            <Plus size={18} />
+          </button>
+        </div>
       </form>
 
       {pockets.length > 0 && (
-        <ul className="flex flex-col gap-1.5 text-sm">
-          {pockets.map((p) => (
-            <li
-              key={p.id}
-              className="flex items-center justify-between rounded-xl bg-bg px-3 py-2.5"
+        <>
+          <ul className="flex flex-col gap-1.5 text-sm">
+            {pockets.map((p) => (
+              <li
+                key={p.id}
+                className="flex items-center justify-between rounded-xl bg-bg px-3 py-2.5"
+              >
+                <span>{p.nome}</span>
+                <span className="flex items-center gap-2.5">
+                  <span className="text-accent-strong">
+                    {formatCurrency(p.saldo)}
+                    {p.metaValor ? (
+                      <span className="text-ink-muted"> / {formatCurrency(p.metaValor)}</span>
+                    ) : null}
+                  </span>
+                  <button
+                    onClick={() => setEditing(p)}
+                    className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
+                    aria-label="Editar caixinha"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={() => setRemoving({ id: p.id, nome: p.nome })}
+                    className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
+                    aria-label="Remover caixinha"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          {pockets.length > 1 && (
+            <button
+              onClick={() => setTransferring(true)}
+              className="mt-3 flex items-center gap-1.5 text-sm text-accent-strong transition-transform active:scale-95 hover:underline"
             >
-              <span>{p.nome}</span>
-              <span className="flex items-center gap-3">
-                <span className="text-accent-strong">{formatCurrency(p.saldo)}</span>
-                <button
-                  onClick={() => setRemoving({ id: p.id, nome: p.nome })}
-                  className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
-                  aria-label="Remover caixinha"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </span>
-            </li>
-          ))}
-        </ul>
+              <ArrowLeftRight size={14} />
+              Transferir entre caixinhas
+            </button>
+          )}
+        </>
       )}
 
       <ConfirmDialog
@@ -450,7 +598,186 @@ function CaixinhasSection() {
         }}
         onCancel={() => setRemoving(null)}
       />
+
+      <EditPocketSheet pocket={editing} onSave={updatePocket} onClose={() => setEditing(null)} />
+      <TransferSheet
+        open={transferring}
+        pockets={pockets}
+        onTransfer={transferBetweenPockets}
+        onClose={() => setTransferring(false)}
+      />
     </SectionCard>
+  );
+}
+
+function EditPocketSheet({
+  pocket,
+  onSave,
+  onClose,
+}: {
+  pocket: Pocket | null;
+  onSave: (
+    id: string,
+    input: { nome: string; saldo: number; metaValor?: number },
+  ) => Promise<void>;
+  onClose: () => void;
+}) {
+  return (
+    <BottomSheet open={pocket !== null} onClose={onClose}>
+      {pocket && (
+        <EditPocketFields key={pocket.id} pocket={pocket} onSave={onSave} onClose={onClose} />
+      )}
+    </BottomSheet>
+  );
+}
+
+function EditPocketFields({
+  pocket,
+  onSave,
+  onClose,
+}: {
+  pocket: Pocket;
+  onSave: (
+    id: string,
+    input: { nome: string; saldo: number; metaValor?: number },
+  ) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [nome, setNome] = useState(pocket.nome);
+  const [saldo, setSaldo] = useState(pocket.saldo);
+  const [metaValor, setMetaValor] = useState(pocket.metaValor ?? 0);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    if (!nome.trim()) {
+      toast.error("Dê um nome para a caixinha.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(pocket.id, { nome: nome.trim(), saldo, metaValor: metaValor || undefined });
+      toast.success("Caixinha atualizada.");
+      onClose();
+    } catch {
+      toast.error("Não foi possível atualizar a caixinha.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <p className="mb-4 font-medium">Editar caixinha</p>
+      <div className="flex flex-col gap-3">
+        <input
+          type="text"
+          placeholder="Nome"
+          value={nome}
+          onChange={(event) => setNome(event.target.value)}
+          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        />
+        <CurrencyInput
+          value={saldo}
+          onChange={setSaldo}
+          placeholder="Saldo atual"
+          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        />
+        <CurrencyInput
+          value={metaValor}
+          onChange={setMetaValor}
+          placeholder="Meta (opcional)"
+          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        />
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60"
+        >
+          Salvar
+        </button>
+      </div>
+    </>
+  );
+}
+
+function TransferSheet({
+  open,
+  pockets,
+  onTransfer,
+  onClose,
+}: {
+  open: boolean;
+  pockets: Pocket[];
+  onTransfer: (fromId: string, toId: string, valor: number) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [fromId, setFromId] = useState(pockets[0]?.id ?? "");
+  const [toId, setToId] = useState(pockets[1]?.id ?? "");
+  const [valor, setValor] = useState(0);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    if (!fromId || !toId || fromId === toId) {
+      toast.error("Escolha duas caixinhas diferentes.");
+      return;
+    }
+    if (!valor || valor <= 0) {
+      toast.error("Informe um valor válido.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onTransfer(fromId, toId, valor);
+      toast.success("Transferência feita.");
+      setValor(0);
+      onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível transferir.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <BottomSheet open={open} onClose={onClose}>
+      <p className="mb-4 font-medium">Transferir entre caixinhas</p>
+      <div className="flex flex-col gap-3">
+        <select
+          value={fromId}
+          onChange={(event) => setFromId(event.target.value)}
+          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        >
+          {pockets.map((p) => (
+            <option key={p.id} value={p.id}>
+              De: {p.nome}
+            </option>
+          ))}
+        </select>
+        <select
+          value={toId}
+          onChange={(event) => setToId(event.target.value)}
+          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        >
+          {pockets.map((p) => (
+            <option key={p.id} value={p.id}>
+              Para: {p.nome}
+            </option>
+          ))}
+        </select>
+        <CurrencyInput
+          value={valor}
+          onChange={setValor}
+          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        />
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60"
+        >
+          Transferir
+        </button>
+      </div>
+    </BottomSheet>
   );
 }
 

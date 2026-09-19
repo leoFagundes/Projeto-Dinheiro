@@ -1,5 +1,15 @@
-import { addMonthsToKey, currentMonthKey, monthKeyOfIsoDate } from "./format";
+import { addMonthsToKey, clampDayToMonth, currentMonthKey, monthKeyOfIsoDate } from "./format";
 import type { Bank, Transaction } from "./types";
+
+export type CalendarEvent = {
+  id: string;
+  data: string;
+  descricao: string;
+  valor: number;
+  tipo: Transaction["tipo"];
+  /** "transacao": já existe no Firestore. "recorrencia": projeção — ainda não foi gerada. */
+  origem: "transacao" | "recorrencia";
+};
 
 function signedValue(t: Transaction): number {
   return t.tipo === "receita" ? t.valor : -t.valor;
@@ -75,6 +85,57 @@ export function computeBankBreakdown(
     nome: bankNameById.get(bancoId) ?? "Banco removido",
     total,
   })).sort((a, b) => b.total - a.total);
+}
+
+/**
+ * Eventos (reais + recorrências projetadas) de um mês, para o calendário.
+ * Transações já existentes (inclusive parcelas futuras já geradas) entram
+ * como estão; templates recorrentes sem instância naquele mês ainda são
+ * projetados virtualmente, respeitando `recorrenteFim` quando definido.
+ */
+export function computeMonthEvents(
+  transactions: Transaction[],
+  monthKey: string,
+): CalendarEvent[] {
+  const events: CalendarEvent[] = [];
+
+  for (const t of transactions) {
+    if (monthKeyOfIsoDate(t.data) === monthKey) {
+      events.push({
+        id: t.id,
+        data: t.data,
+        descricao: t.descricao,
+        valor: t.valor,
+        tipo: t.tipo,
+        origem: "transacao",
+      });
+    }
+  }
+
+  const templates = transactions.filter((t) => t.recorrente && !t.recorrenteOrigemId);
+  for (const template of templates) {
+    const templateMonth = monthKeyOfIsoDate(template.data);
+    if (templateMonth === monthKey) continue; // já contado acima como transação real
+    if (monthKey < templateMonth) continue; // recorrência ainda não começou
+    if (template.recorrenteFim && monthKey > template.recorrenteFim) continue;
+
+    const jaExiste = transactions.some(
+      (t) => t.recorrenteOrigemId === template.id && monthKeyOfIsoDate(t.data) === monthKey,
+    );
+    if (jaExiste) continue;
+
+    const day = clampDayToMonth(monthKey, Number(template.data.slice(8, 10)));
+    events.push({
+      id: `${template.id}-${monthKey}`,
+      data: `${monthKey}-${day}`,
+      descricao: template.descricao,
+      valor: template.valor,
+      tipo: template.tipo,
+      origem: "recorrencia",
+    });
+  }
+
+  return events.sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0));
 }
 
 export function computeBalanceTrend(

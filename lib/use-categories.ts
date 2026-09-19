@@ -79,10 +79,25 @@ export function useCategories() {
     await updateDoc(doc(db, COLLECTION, id), { nome });
   }, []);
 
+  const updateCategory = useCallback(
+    async (id: string, input: { nome: string; icone: string }) => {
+      await updateDoc(doc(db, COLLECTION, id), input);
+    },
+    [],
+  );
+
   const byType = useCallback(
     (tipo: TransactionType) => categories.filter((c) => c.tipo === tipo),
     [categories],
   );
 
-  return { categories, loading, addCategory, removeCategory, renameCategory, byType };
+  return {
+    categories,
+    loading,
+    addCategory,
+    removeCategory,
+    renameCategory,
+    updateCategory,
+    byType,
+  };
 }

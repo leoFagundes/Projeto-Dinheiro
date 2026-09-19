@@ -8,6 +8,7 @@ import { formatCurrency } from "@/lib/format";
 import { FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { EmptyState } from "@/app/_components/EmptyState";
 import { BottomSheet } from "@/app/_components/BottomSheet";
+import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import type { CategoryGoal } from "@/lib/types";
 
 export function CategoryGoals({
@@ -92,11 +93,11 @@ function GoalsEditor({
 }) {
   const { byType } = useCategories();
   const despesaCategorias = byType("despesa");
-  const [values, setValues] = useState<Record<string, string>>(() => {
-    const initial: Record<string, string> = {};
+  const [values, setValues] = useState<Record<string, number>>(() => {
+    const initial: Record<string, number> = {};
     for (const categoria of despesaCategorias) {
       const existing = goals.find((g) => g.categoria === categoria.nome);
-      initial[categoria.nome] = existing ? String(existing.limiteMensal) : "";
+      initial[categoria.nome] = existing?.limiteMensal ?? 0;
     }
     return initial;
   });
@@ -106,10 +107,9 @@ function GoalsEditor({
     setSaving(true);
     try {
       for (const categoria of despesaCategorias) {
-        const raw = values[categoria.nome];
-        const parsed = Number(raw?.replace(",", "."));
-        if (raw && parsed > 0) {
-          await onSetGoal(categoria.nome, parsed);
+        const valor = values[categoria.nome];
+        if (valor > 0) {
+          await onSetGoal(categoria.nome, valor);
         }
       }
       toast.success("Metas atualizadas.");
@@ -131,15 +131,12 @@ function GoalsEditor({
               <span>{categoria.icone ?? FALLBACK_CATEGORY_ICON}</span>
               {categoria.nome}
             </span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="Sem limite"
-              value={values[categoria.nome] ?? ""}
-              onChange={(event) =>
-                setValues((prev) => ({ ...prev, [categoria.nome]: event.target.value }))
+            <CurrencyInput
+              value={values[categoria.nome] ?? 0}
+              onChange={(valor) =>
+                setValues((prev) => ({ ...prev, [categoria.nome]: valor }))
               }
+              placeholder="Sem limite"
               className="w-32 rounded-2xl border border-border px-3 py-2 text-right text-sm outline-none transition-colors focus:border-accent"
             />
           </label>

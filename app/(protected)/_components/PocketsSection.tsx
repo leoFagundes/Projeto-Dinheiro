@@ -6,6 +6,7 @@ import Link from "next/link";
 import { PiggyBank } from "lucide-react";
 import { EmptyState } from "@/app/_components/EmptyState";
 import { BottomSheet } from "@/app/_components/BottomSheet";
+import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import { formatCurrency } from "@/lib/format";
 import type { Pocket } from "@/lib/types";
 
@@ -31,22 +32,40 @@ export function PocketsSection({
   return (
     <div className="flex flex-col gap-3">
       <ul className="grid grid-cols-2 gap-3">
-        {pockets.map((pocket) => (
-          <li key={pocket.id}>
-            <button
-              onClick={() => setAdjusting(pocket)}
-              className="w-full rounded-card bg-surface p-4 text-left transition-transform active:scale-[0.98]"
-            >
-              <p className="flex items-center gap-1.5 text-sm text-ink-muted">
-                <PiggyBank size={14} />
-                {pocket.nome}
-              </p>
-              <p className="mt-1 text-lg font-semibold text-accent-strong">
-                {formatCurrency(pocket.saldo)}
-              </p>
-            </button>
-          </li>
-        ))}
+        {pockets.map((pocket) => {
+          const percent = pocket.metaValor
+            ? Math.min((pocket.saldo / pocket.metaValor) * 100, 100)
+            : null;
+          return (
+            <li key={pocket.id}>
+              <button
+                onClick={() => setAdjusting(pocket)}
+                className="w-full rounded-card bg-surface p-4 text-left transition-transform active:scale-[0.98]"
+              >
+                <p className="flex items-center gap-1.5 text-sm text-ink-muted">
+                  <PiggyBank size={14} />
+                  {pocket.nome}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-accent-strong">
+                  {formatCurrency(pocket.saldo)}
+                </p>
+                {percent !== null && (
+                  <>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg">
+                      <div
+                        className="h-full rounded-full bg-accent transition-all duration-500 ease-out"
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                    <p className="mt-1 text-[11px] text-ink-muted">
+                      meta: {formatCurrency(pocket.metaValor!)}
+                    </p>
+                  </>
+                )}
+              </button>
+            </li>
+          );
+        })}
       </ul>
 
       <Link
@@ -71,26 +90,25 @@ function AdjustPocketSheet({
   onClose: () => void;
 }) {
   const [modo, setModo] = useState<"adicionar" | "retirar">("adicionar");
-  const [valor, setValor] = useState("");
+  const [valor, setValor] = useState(0);
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     if (!pocket) return;
-    const parsed = Number(valor.replace(",", "."));
-    if (!parsed || parsed <= 0) {
+    if (!valor || valor <= 0) {
       toast.error("Informe um valor válido.");
       return;
     }
-    if (modo === "retirar" && parsed > pocket.saldo) {
+    if (modo === "retirar" && valor > pocket.saldo) {
       toast.error("Saldo insuficiente nessa caixinha.");
       return;
     }
 
     setSaving(true);
     try {
-      await onAdjust(pocket.id, modo === "adicionar" ? parsed : -parsed);
+      await onAdjust(pocket.id, modo === "adicionar" ? valor : -valor);
       toast.success(modo === "adicionar" ? "Valor adicionado." : "Valor retirado.");
-      setValor("");
+      setValor(0);
       setModo("adicionar");
       onClose();
     } catch {
@@ -129,14 +147,9 @@ function AdjustPocketSheet({
         </button>
       </div>
 
-      <input
-        type="number"
-        inputMode="decimal"
-        step="0.01"
-        min="0"
-        placeholder="R$ 0,00"
+      <CurrencyInput
         value={valor}
-        onChange={(event) => setValor(event.target.value)}
+        onChange={setValor}
         className="mt-3 w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
       />
 

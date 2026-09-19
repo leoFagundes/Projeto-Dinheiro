@@ -14,6 +14,8 @@ export type Transaction = {
   recorrente: boolean;
   /** Vincula uma transação gerada automaticamente ao template recorrente que a originou */
   recorrenteOrigemId?: string;
+  /** Mês (yyyy-MM) em que a recorrência para de gerar novas instâncias, se definido */
+  recorrenteFim?: string;
   /** Banco/instituição associada a esta despesa (opcional) */
   bancoId?: string;
   /** Crédito conta na fatura do banco; débito é pagamento imediato e não conta. Padrão: crédito. */
@@ -59,5 +61,7 @@ export type Pocket = {
   userId: string;
   nome: string;
   saldo: number;
+  /** Valor-alvo opcional, para mostrar uma barra de progresso. */
+  metaValor?: number;
   criadoEm: number;
 };

@@ -10,6 +10,8 @@ import { useBanks } from "@/lib/use-banks";
 import { formatCurrency, todayIsoDate } from "@/lib/format";
 import { FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { BottomSheet } from "./BottomSheet";
+import { CurrencyInput } from "./CurrencyInput";
+import { ConfirmDialog } from "./ConfirmDialog";
 import type { FormaPagamento, Transaction, TransactionType } from "@/lib/types";
 
 export function TransactionFormSheet({
@@ -40,16 +42,18 @@ function TransactionFormFields({
   transaction?: Transaction;
   onClose: () => void;
 }) {
-  const { addTransaction, addInstallmentPurchase, updateTransaction } = useTransactions();
+  const { addTransaction, addInstallmentPurchase, updateTransaction, cancelRemainingInstallments } =
+    useTransactions();
   const { byType: categoriesByType } = useCategories();
   const { banks } = useBanks();
   const [submitting, setSubmitting] = useState(false);
+  const [confirmingCancelParcelas, setConfirmingCancelParcelas] = useState(false);
 
   const isEditing = transaction !== undefined;
   const isRecurringChild = isEditing && Boolean(transaction?.recorrenteOrigemId);
 
   const [tipo, setTipo] = useState<TransactionType>(transaction?.tipo ?? "despesa");
-  const [valor, setValor] = useState(transaction ? String(transaction.valor) : "");
+  const [valor, setValor] = useState(transaction?.valor ?? 0);
   const [categoriaEscolhida, setCategoriaEscolhida] = useState(transaction?.categoria ?? "");
   const [bancoId, setBancoId] = useState(transaction?.bancoId ?? "");
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>(
@@ -58,8 +62,10 @@ function TransactionFormFields({
   const [descricao, setDescricao] = useState(transaction?.descricao ?? "");
   const [data, setData] = useState(transaction?.data ?? todayIsoDate());
   const [recorrente, setRecorrente] = useState(transaction?.recorrente ?? false);
+  const [recorrenteFim, setRecorrenteFim] = useState(transaction?.recorrenteFim ?? "");
   const [parcelar, setParcelar] = useState(false);
   const [numParcelas, setNumParcelas] = useState("2");
+  const [parcelaInicial, setParcelaInicial] = useState("1");
 
   const categoriaOptions = categoriesByType(tipo);
   // Deriva a categoria efetivamente selecionada em vez de sincronizar via
@@ -71,8 +77,11 @@ function TransactionFormFields({
   // Parcelamento só faz sentido para uma despesa nova, no crédito, vinculada a um banco.
   const podeParcelar =
     !isEditing && tipo === "despesa" && bancoId !== "" && formaPagamento === "credito";
-  const parsedValor = Number(valor.replace(",", "."));
   const parcelasCount = Math.min(24, Math.max(2, Math.round(Number(numParcelas)) || 2));
+  const parcelaInicialCount = Math.min(
+    parcelasCount,
+    Math.max(1, Math.round(Number(parcelaInicial)) || 1),
+  );
 
   function changeTipo(next: TransactionType) {
     setTipo(next);
@@ -93,18 +102,20 @@ function TransactionFormFields({
   }
 
   function resetForm() {
-    setValor("");
+    setValor(0);
     setDescricao("");
     setData(todayIsoDate());
     setRecorrente(false);
+    setRecorrenteFim("");
     setParcelar(false);
     setNumParcelas("2");
+    setParcelaInicial("1");
     setFormaPagamento("credito");
   }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!parsedValor || parsedValor <= 0) {
+    if (!valor || valor <= 0) {
       toast.error("Informe um valor válido.");
       return;
     }
@@ -121,29 +132,32 @@ function TransactionFormFields({
     try {
       if (transaction) {
         await updateTransaction(transaction.id, {
-          valor: parsedValor,
+          valor,
           tipo,
           categoria,
           descricao: descricao.trim(),
           data,
           recorrente,
+          ...(recorrente && recorrenteFim ? { recorrenteFim } : {}),
           ...(tipo === "despesa" && bancoId ? { bancoId, formaPagamento } : {}),
         });
         toast.success("Transação atualizada.");
       } else if (podeParcelar && parcelar) {
         await addInstallmentPurchase(
-          { valorTotal: parsedValor, categoria, descricao: descricao.trim(), data, bancoId },
+          { valorTotal: valor, categoria, descricao: descricao.trim(), data, bancoId },
           parcelasCount,
+          parcelaInicialCount,
         );
         toast.success(`Compra parcelada em ${parcelasCount}x.`);
       } else {
         await addTransaction({
-          valor: parsedValor,
+          valor,
           tipo,
           categoria,
           descricao: descricao.trim(),
           data,
           recorrente,
+          ...(recorrente && recorrenteFim ? { recorrenteFim } : {}),
           ...(tipo === "despesa" && bancoId ? { bancoId, formaPagamento } : {}),
         });
         toast.success("Transação adicionada.");
@@ -166,6 +180,18 @@ function TransactionFormFields({
       onClose();
     } catch {
       toast.error("Não foi possível cancelar a recorrência.");
+    }
+  }
+
+  async function handleCancelRemaining() {
+    if (!transaction?.compraId || !transaction.parcelaAtual) return;
+    try {
+      await cancelRemainingInstallments(transaction.compraId, transaction.parcelaAtual);
+      toast.success("Parcelas restantes canceladas.");
+      setConfirmingCancelParcelas(false);
+      onClose();
+    } catch {
+      toast.error("Não foi possível cancelar as parcelas.");
     }
   }
 
@@ -208,14 +234,9 @@ function TransactionFormFields({
           </button>
         </div>
 
-        <input
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min="0"
-          placeholder="R$ 0,00"
+        <CurrencyInput
           value={valor}
-          onChange={(event) => setValor(event.target.value)}
+          onChange={setValor}
           className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
         />
 
@@ -303,20 +324,35 @@ function TransactionFormFields({
               Parcelar essa compra
             </label>
             {parcelar && (
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <input
-                  type="number"
-                  min="2"
-                  max="24"
-                  value={numParcelas}
-                  onChange={(event) => setNumParcelas(event.target.value)}
-                  className="w-20 rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none transition-colors focus:border-accent"
-                />
+              <div className="mt-3 flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-xs text-ink-muted">
+                    Em
+                    <input
+                      type="number"
+                      min="2"
+                      max="24"
+                      value={numParcelas}
+                      onChange={(event) => setNumParcelas(event.target.value)}
+                      className="w-16 rounded-xl border border-border bg-surface px-2 py-1.5 text-sm outline-none transition-colors focus:border-accent"
+                    />
+                    vezes
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-ink-muted">
+                    A partir da parcela
+                    <input
+                      type="number"
+                      min="1"
+                      max={parcelasCount}
+                      value={parcelaInicial}
+                      onChange={(event) => setParcelaInicial(event.target.value)}
+                      className="w-14 rounded-xl border border-border bg-surface px-2 py-1.5 text-sm outline-none transition-colors focus:border-accent"
+                    />
+                  </label>
+                </div>
                 <span className="text-xs text-ink-muted">
-                  {parcelasCount}x de{" "}
-                  {parsedValor > 0
-                    ? formatCurrency(parsedValor / parcelasCount)
-                    : "R$ 0,00"}
+                  {parcelasCount}x de {formatCurrency(valor / parcelasCount)} — lança da parcela{" "}
+                  {parcelaInicialCount}/{parcelasCount} em diante
                 </span>
               </div>
             )}
@@ -331,10 +367,18 @@ function TransactionFormFields({
         />
 
         {transaction?.parcelaTotal && (
-          <p className="rounded-2xl bg-bg px-4 py-3 text-sm text-ink-muted">
-            Parcela {transaction.parcelaAtual}/{transaction.parcelaTotal} de uma compra
-            parcelada. Para cancelar as próximas, exclua-as individualmente no histórico.
-          </p>
+          <div className="flex items-center justify-between rounded-2xl bg-bg px-4 py-3 text-sm text-ink-muted">
+            <span>
+              Parcela {transaction.parcelaAtual}/{transaction.parcelaTotal}
+            </span>
+            <button
+              type="button"
+              onClick={() => setConfirmingCancelParcelas(true)}
+              className="text-negative transition-transform active:scale-95 hover:underline"
+            >
+              Cancelar restantes
+            </button>
+          </div>
         )}
 
         {parcelar ? null : isRecurringChild ? (
@@ -349,15 +393,28 @@ function TransactionFormFields({
             </button>
           </div>
         ) : (
-          <label className="flex items-center gap-2 py-1 text-sm text-ink-muted">
-            <input
-              type="checkbox"
-              checked={recorrente}
-              onChange={(event) => setRecorrente(event.target.checked)}
-              className="size-4 accent-accent"
-            />
-            Repetir todo mês
-          </label>
+          <div className="flex flex-col gap-2">
+            <label className="flex items-center gap-2 py-1 text-sm text-ink-muted">
+              <input
+                type="checkbox"
+                checked={recorrente}
+                onChange={(event) => setRecorrente(event.target.checked)}
+                className="size-4 accent-accent"
+              />
+              Repetir todo mês
+            </label>
+            {recorrente && (
+              <label className="flex items-center gap-2 text-xs text-ink-muted">
+                Repetir até (opcional)
+                <input
+                  type="month"
+                  value={recorrenteFim}
+                  onChange={(event) => setRecorrenteFim(event.target.value)}
+                  className="rounded-xl border border-border px-2 py-1.5 text-sm outline-none transition-colors focus:border-accent"
+                />
+              </label>
+            )}
+          </div>
         )}
 
         <button
@@ -368,6 +425,16 @@ function TransactionFormFields({
           {isEditing ? "Salvar alterações" : "Salvar"}
         </button>
       </form>
+
+      <ConfirmDialog
+        open={confirmingCancelParcelas}
+        title="Cancelar parcelas restantes?"
+        description={`Esta e todas as próximas parcelas dessa compra (a partir de ${transaction?.parcelaAtual}/${transaction?.parcelaTotal}) serão excluídas.`}
+        confirmLabel="Cancelar parcelas"
+        danger
+        onConfirm={handleCancelRemaining}
+        onCancel={() => setConfirmingCancelParcelas(false)}
+      />
     </>
   );
 }
