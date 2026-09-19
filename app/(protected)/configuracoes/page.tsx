@@ -21,6 +21,7 @@ import { usePockets } from "@/lib/use-pockets";
 import { useTransactions } from "@/lib/use-transactions";
 import { usePocketMovements } from "@/lib/use-pocket-movements";
 import { useBankPayments } from "@/lib/use-bank-payments";
+import { useBankTransfers } from "@/lib/use-bank-transfers";
 import { useInvestments } from "@/lib/use-investments";
 import { useInvestmentMovements } from "@/lib/use-investment-movements";
 import { computeBankSaldoConta } from "@/lib/derived";
@@ -72,7 +73,8 @@ function SectionCard({
 
 function CategoriasSection() {
   const { categories, addCategory, removeCategory, updateCategory } = useCategories();
-  const { goals, removeGoal, renameGoalCategoria } = useCategoryGoals();
+  const { goals, overrides, removeGoal, removeGoalOverride, renameGoalCategoria } =
+    useCategoryGoals();
   const [nome, setNome] = useState("");
   const [tipo, setTipo] = useState<TransactionType>("despesa");
   const [icone, setIcone] = useState(FALLBACK_CATEGORY_ICON);
@@ -226,6 +228,11 @@ function CategoriasSection() {
           await removeCategory(removing.id);
           const orphanGoal = goals.find((g) => g.categoria === removing.nome);
           if (orphanGoal) await removeGoal(orphanGoal.id);
+          await Promise.all(
+            overrides
+              .filter((o) => o.categoria === removing.nome)
+              .map((o) => removeGoalOverride(o.id)),
+          );
           toast.success("Categoria removida.");
           setRemoving(null);
         }}
@@ -338,6 +345,7 @@ function BancosSection() {
   const { movements } = usePocketMovements();
   const { payments } = useBankPayments();
   const { movements: investmentMovements } = useInvestmentMovements();
+  const { transfers } = useBankTransfers();
   const [nome, setNome] = useState("");
   const [saldoDevedor, setSaldoDevedor] = useState(0);
   const [saldoContaInicial, setSaldoContaInicial] = useState(0);
@@ -399,6 +407,7 @@ function BancosSection() {
               movements,
               payments,
               investmentMovements,
+              transfers,
             );
             return (
               <li key={b.id} className="rounded-xl bg-bg px-3 py-2.5">

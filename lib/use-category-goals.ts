@@ -13,13 +13,15 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./auth-context";
-import type { CategoryGoal } from "./types";
+import type { CategoryGoal, CategoryGoalOverride } from "./types";
 
 const COLLECTION = "categoryGoals";
+const OVERRIDES_COLLECTION = "categoryGoalOverrides";
 
 export function useCategoryGoals() {
   const { user } = useAuth();
   const [goals, setGoals] = useState<CategoryGoal[]>([]);
+  const [overrides, setOverrides] = useState<CategoryGoalOverride[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,6 +37,20 @@ export function useCategoryGoals() {
       }));
       setGoals(items);
       setLoading(false);
+    });
+    return unsubscribe;
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(collection(db, OVERRIDES_COLLECTION), where("userId", "==", user.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const items = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...(docSnap.data() as Omit<CategoryGoalOverride, "id">),
+      }));
+      setOverrides(items);
     });
     return unsubscribe;
   }, [user]);
@@ -60,15 +76,55 @@ export function useCategoryGoals() {
     await deleteDoc(doc(db, COLLECTION, id));
   }, []);
 
-  /** Mantém a meta acompanhando a categoria quando ela é renomeada. */
+  /** Mantém o limite de gastos acompanhando a categoria quando ela é renomeada. */
   const renameGoalCategoria = useCallback(
     async (nomeAntigo: string, nomeNovo: string) => {
       const existing = goals.find((g) => g.categoria === nomeAntigo);
-      if (!existing) return;
-      await updateDoc(doc(db, COLLECTION, existing.id), { categoria: nomeNovo });
+      if (existing) {
+        await updateDoc(doc(db, COLLECTION, existing.id), { categoria: nomeNovo });
+      }
+      await Promise.all(
+        overrides
+          .filter((o) => o.categoria === nomeAntigo)
+          .map((o) => updateDoc(doc(db, OVERRIDES_COLLECTION, o.id), { categoria: nomeNovo })),
+      );
     },
-    [goals],
+    [goals, overrides],
   );
 
-  return { goals, loading, setGoal, removeGoal, renameGoalCategoria };
+  /** Define (ou atualiza) um limite que vale só pra um mês específico, sem mexer no limite geral. */
+  const setGoalOverride = useCallback(
+    async (categoria: string, monthKey: string, limiteMensal: number) => {
+      if (!user) return;
+      const existing = overrides.find(
+        (o) => o.categoria === categoria && o.monthKey === monthKey,
+      );
+      if (existing) {
+        await updateDoc(doc(db, OVERRIDES_COLLECTION, existing.id), { limiteMensal });
+      } else {
+        await addDoc(collection(db, OVERRIDES_COLLECTION), {
+          userId: user.uid,
+          categoria,
+          monthKey,
+          limiteMensal,
+        });
+      }
+    },
+    [user, overrides],
+  );
+
+  const removeGoalOverride = useCallback(async (id: string) => {
+    await deleteDoc(doc(db, OVERRIDES_COLLECTION, id));
+  }, []);
+
+  return {
+    goals,
+    overrides,
+    loading,
+    setGoal,
+    removeGoal,
+    renameGoalCategoria,
+    setGoalOverride,
+    removeGoalOverride,
+  };
 }

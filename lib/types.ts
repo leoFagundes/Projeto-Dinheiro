@@ -36,6 +36,16 @@ export type CategoryGoal = {
   limiteMensal: number;
 };
 
+/** Exceção pontual ao limite geral de uma categoria, valendo só pra um mês específico. */
+export type CategoryGoalOverride = {
+  id: string;
+  userId: string;
+  categoria: string;
+  /** Mês (yyyy-MM) em que esse limite substitui o geral. */
+  monthKey: string;
+  limiteMensal: number;
+};
+
 export type Category = {
   id: string;
   userId: string;
@@ -91,6 +101,18 @@ export type BankPayment = {
   id: string;
   userId: string;
   bancoId: string;
+  valor: number;
+  /** ISO date string (yyyy-MM-dd) */
+  data: string;
+  criadoEm: number;
+};
+
+/** Transferência de saldo em conta de um banco para outro. */
+export type BankTransfer = {
+  id: string;
+  userId: string;
+  fromBancoId: string;
+  toBancoId: string;
   valor: number;
   /** ISO date string (yyyy-MM-dd) */
   data: string;

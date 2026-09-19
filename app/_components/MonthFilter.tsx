@@ -4,12 +4,15 @@ import { addMonthsToKey, formatMonthLabel } from "@/lib/format";
 export function MonthFilter({
   monthKey,
   onChange,
+  className = "bg-surface",
 }: {
   monthKey: string;
   onChange: (nextMonthKey: string) => void;
+  /** Cor de fundo do card — troque pra "bg-bg" quando já estiver dentro de um card bg-surface. */
+  className?: string;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-card bg-surface px-4 py-3">
+    <div className={`flex items-center justify-between rounded-card px-4 py-3 ${className}`}>
       <button
         onClick={() => onChange(addMonthsToKey(monthKey, -1))}
         aria-label="Mês anterior"

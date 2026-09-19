@@ -104,6 +104,22 @@ export function useBanks() {
     [user],
   );
 
+  /** Transfere saldo em conta de um banco para outro. */
+  const transferBetweenBanks = useCallback(
+    async (fromBancoId: string, toBancoId: string, valor: number) => {
+      if (!user) return;
+      await addDoc(collection(db, "bankTransfers"), {
+        userId: user.uid,
+        fromBancoId,
+        toBancoId,
+        valor,
+        data: todayIsoDate(),
+        criadoEm: Date.now(),
+      });
+    },
+    [user],
+  );
+
   return {
     banks,
     loading,
@@ -112,5 +128,6 @@ export function useBanks() {
     updateBank,
     removeBank,
     payFatura,
+    transferBetweenBanks,
   };
 }

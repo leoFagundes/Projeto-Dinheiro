@@ -1,13 +1,12 @@
 "use client";
 
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
-  Line,
-  LineChart,
   Pie,
   PieChart,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -94,49 +93,60 @@ export function CategoryPieChart({
   );
 }
 
-export function BalanceTrendChart({
+/**
+ * Receitas x despesas por mês — não é um saldo acumulado (esse conceito hoje
+ * é o Patrimônio, que depende do estado atual de bancos/caixinhas/investimentos,
+ * não dá pra reconstruir com precisão só a partir do histórico de transações).
+ */
+export function MonthlyFlowChart({
   data,
 }: {
-  data: { monthKey: string; saldo: number }[];
+  data: { monthKey: string; receitas: number; despesas: number; saldoMes: number }[];
 }) {
-  const hasMovement = data.some((item) => item.saldo !== 0);
+  const hasMovement = data.some((item) => item.receitas !== 0 || item.despesas !== 0);
   if (!hasMovement) {
     return (
       <EmptyState
         icon={TrendingUp}
         title="Sem histórico ainda"
-        description="A evolução do seu saldo nos últimos meses aparece aqui."
+        description="Receitas e despesas dos últimos meses aparecem aqui, lado a lado."
       />
     );
   }
 
   return (
-    <div className="h-48">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-          <CartesianGrid vertical={false} stroke="#e7e4df" />
-          <XAxis
-            dataKey="monthKey"
-            tickFormatter={(key: string) => formatMonthLabel(key).slice(0, 3)}
-            tick={{ fill: "#79716b", fontSize: 12 }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <ReferenceLine y={0} stroke="#c3c2b7" strokeDasharray="3 3" />
-          <Tooltip
-            formatter={(value) => formatCurrency(Number(value))}
-            labelFormatter={(label) => formatMonthLabel(String(label))}
-          />
-          <Line
-            type="monotone"
-            dataKey="saldo"
-            stroke="#16a34a"
-            strokeWidth={2}
-            dot={{ r: 3, fill: "#16a34a", strokeWidth: 0 }}
-            activeDot={{ r: 5 }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+    <div>
+      <div className="h-48">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+            <CartesianGrid vertical={false} stroke="#e7e4df" />
+            <XAxis
+              dataKey="monthKey"
+              tickFormatter={(key: string) => formatMonthLabel(key).slice(0, 3)}
+              tick={{ fill: "#79716b", fontSize: 12 }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip
+              formatter={(value, name) => [
+                formatCurrency(Number(value)),
+                name === "receitas" ? "Receitas" : "Despesas",
+              ]}
+              labelFormatter={(label) => formatMonthLabel(String(label))}
+            />
+            <Bar dataKey="receitas" fill="#16a34a" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="despesas" fill="#e05252" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="mt-2 flex items-center justify-center gap-4 text-xs text-ink-muted">
+        <span className="flex items-center gap-1.5">
+          <span className="size-2.5 rounded-full bg-accent" /> Receitas
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="size-2.5 rounded-full bg-negative" /> Despesas
+        </span>
+      </div>
     </div>
   );
 }

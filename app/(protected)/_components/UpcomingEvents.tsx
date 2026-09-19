@@ -23,7 +23,7 @@ export function UpcomingEvents({ events }: { events: CalendarEvent[] }) {
           return (
             <li
               key={event.id}
-              className="flex items-center justify-between gap-3 rounded-2xl bg-bg px-4 py-3 text-sm"
+              className="flex items-center justify-between gap-3 rounded-card bg-surface px-4 py-3 text-sm"
             >
               <span className="min-w-0">
                 <span className="block truncate font-medium">{event.descricao}</span>

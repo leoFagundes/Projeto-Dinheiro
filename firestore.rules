@@ -17,6 +17,13 @@ service cloud.firestore {
         && request.auth.uid == request.resource.data.userId;
     }
 
+    match /categoryGoalOverrides/{overrideId} {
+      allow read, update, delete: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.userId;
+    }
+
     match /categories/{categoryId} {
       allow read, update, delete: if request.auth != null
         && request.auth.uid == resource.data.userId;
@@ -46,6 +53,13 @@ service cloud.firestore {
     }
 
     match /bankPayments/{paymentId} {
+      allow read, update, delete: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.userId;
+    }
+
+    match /bankTransfers/{transferId} {
       allow read, update, delete: if request.auth != null
         && request.auth.uid == resource.data.userId;
       allow create: if request.auth != null

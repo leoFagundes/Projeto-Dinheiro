@@ -8,6 +8,7 @@ import {
 import type {
   Bank,
   BankPayment,
+  BankTransfer,
   Investment,
   InvestmentMovement,
   Pocket,
@@ -24,10 +25,6 @@ export type CalendarEvent = {
   /** "transacao": já existe no Firestore. "recorrencia": projeção — ainda não foi gerada. */
   origem: "transacao" | "recorrencia";
 };
-
-function signedValue(t: Transaction): number {
-  return t.tipo === "receita" ? t.valor : -t.valor;
-}
 
 export function computeMonthTotals(transactions: Transaction[], monthKey: string) {
   const monthTx = transactions.filter((t) => monthKeyOfIsoDate(t.data) === monthKey);
@@ -99,9 +96,10 @@ export function computeBankBreakdown(
 
 /**
  * Saldo em conta de um banco: base ajustada manualmente + receitas recebidas
- * nele + retiradas de caixinhas/resgates de investimento de volta pra conta,
- * menos despesas no débito (saem da conta na hora), depósitos em caixinhas,
- * aportes em investimentos e pagamentos de fatura feitos a partir dele.
+ * nele + retiradas de caixinhas/resgates de investimento de volta pra conta +
+ * transferências recebidas de outro banco, menos despesas no débito (saem da
+ * conta na hora), depósitos em caixinhas, aportes em investimentos, pagamentos
+ * de fatura e transferências enviadas a outro banco.
  * Despesas no crédito não entram aqui — elas compõem a fatura, cobrada depois.
  */
 export function computeBankSaldoConta(
@@ -110,6 +108,7 @@ export function computeBankSaldoConta(
   movements: PocketMovement[],
   payments: BankPayment[] = [],
   investmentMovements: InvestmentMovement[] = [],
+  transfers: BankTransfer[] = [],
 ): number {
   let saldo = bank.saldoContaInicial ?? 0;
   for (const t of transactions) {
@@ -129,6 +128,10 @@ export function computeBankSaldoConta(
     if (m.bancoId !== bank.id) continue;
     saldo += m.tipo === "resgate" ? m.valor : -m.valor;
   }
+  for (const tr of transfers) {
+    if (tr.fromBancoId === bank.id) saldo -= tr.valor;
+    if (tr.toBancoId === bank.id) saldo += tr.valor;
+  }
   return saldo;
 }
 
@@ -145,11 +148,19 @@ export function computePatrimonio(
   pocketMovements: PocketMovement[],
   bankPayments: BankPayment[],
   investmentMovements: InvestmentMovement[],
+  bankTransfers: BankTransfer[] = [],
 ): { contas: number; caixinhas: number; investimentos: number; dividas: number; total: number } {
   const contas = banks.reduce(
     (sum, b) =>
       sum +
-      computeBankSaldoConta(b, transactions, pocketMovements, bankPayments, investmentMovements),
+      computeBankSaldoConta(
+        b,
+        transactions,
+        pocketMovements,
+        bankPayments,
+        investmentMovements,
+        bankTransfers,
+      ),
     0,
   );
   const caixinhas = pockets.reduce((sum, p) => sum + p.saldo, 0);
@@ -248,24 +259,19 @@ export function computeUpcomingEvents(transactions: Transaction[], days = 7): Ca
     .sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0));
 }
 
-export function computeBalanceTrend(
+/**
+ * Receitas x despesas mês a mês (não é um saldo acumulado — cada mês é
+ * independente). Usado pra ver tendência sem inventar um "saldo" que não bate
+ * com o Patrimônio, já que este último depende do estado atual de bancos,
+ * caixinhas e investimentos, não só do histórico de transações.
+ */
+export function computeMonthlyFlowTrend(
   transactions: Transaction[],
   months = 6,
-): { monthKey: string; saldo: number }[] {
+): { monthKey: string; receitas: number; despesas: number; saldoMes: number }[] {
   const currentKey = currentMonthKey();
   const keys: string[] = [];
   for (let i = months - 1; i >= 0; i--) keys.push(addMonthsToKey(currentKey, -i));
 
-  const windowStart = keys[0];
-  let runningBalance = transactions
-    .filter((t) => monthKeyOfIsoDate(t.data) < windowStart)
-    .reduce((sum, t) => sum + signedValue(t), 0);
-
-  return keys.map((monthKey) => {
-    const net = transactions
-      .filter((t) => monthKeyOfIsoDate(t.data) === monthKey)
-      .reduce((sum, t) => sum + signedValue(t), 0);
-    runningBalance += net;
-    return { monthKey, saldo: runningBalance };
-  });
+  return keys.map((monthKey) => ({ monthKey, ...computeMonthTotals(transactions, monthKey) }));
 }
