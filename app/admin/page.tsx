@@ -1,0 +1,72 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { getAdminAuth, getAdminFirestore } from "@/lib/firebase-admin";
+import { ADMIN_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-session";
+import { UsersTable, type AdminUser } from "./_components/UsersTable";
+import { adminLogout } from "./actions";
+
+export default async function AdminPage() {
+  // O Proxy já faz essa checagem antes de chegar aqui, mas a página confirma de novo —
+  // "sempre verifique dentro de cada Server Function/página, nunca só no Proxy".
+  const cookieStore = await cookies();
+  const token = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
+  if (!(await verifyAdminSessionToken(token))) {
+    redirect("/admin/login");
+  }
+
+  const { users: authUsers } = await getAdminAuth().listUsers(1000);
+  const db = getAdminFirestore();
+
+  // Resumo de uso a partir das transações — não usa orderBy pra não depender
+  // de um índice composto que este projeto nunca precisou até aqui.
+  const usage = await Promise.all(
+    authUsers.map(async (user) => {
+      const snap = await db
+        .collection("transactions")
+        .where("userId", "==", user.uid)
+        .select("criadoEm")
+        .get();
+      let ultimaAtividade: number | null = null;
+      for (const doc of snap.docs) {
+        const criadoEm = doc.data().criadoEm as number | undefined;
+        if (criadoEm != null && (ultimaAtividade === null || criadoEm > ultimaAtividade)) {
+          ultimaAtividade = criadoEm;
+        }
+      }
+      return { uid: user.uid, totalTransacoes: snap.size, ultimaAtividade };
+    }),
+  );
+  const usageByUid = new Map(usage.map((u) => [u.uid, u]));
+
+  const users: AdminUser[] = authUsers
+    .map((user) => ({
+      uid: user.uid,
+      email: user.email ?? "(sem e-mail)",
+      displayName: user.displayName ?? null,
+      disabled: user.disabled,
+      createdAt: user.metadata.creationTime,
+      lastSignInAt: user.metadata.lastSignInTime ?? null,
+      providers: user.providerData.map((p) => p.providerId),
+      totalTransacoes: usageByUid.get(user.uid)?.totalTransacoes ?? 0,
+      ultimaAtividade: usageByUid.get(user.uid)?.ultimaAtividade ?? null,
+    }))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  return (
+    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-6 px-5 py-8">
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold">Usuários ({users.length})</h1>
+        <form action={adminLogout}>
+          <button
+            type="submit"
+            className="text-sm text-ink-muted transition-transform active:scale-95 hover:text-negative"
+          >
+            Sair
+          </button>
+        </form>
+      </div>
+
+      <UsersTable users={users} />
+    </main>
+  );
+}
