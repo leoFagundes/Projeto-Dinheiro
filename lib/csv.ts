@@ -1,4 +1,5 @@
-import type { Bank, Pocket, Transaction } from "./types";
+import { computePocketRendimento } from "./derived";
+import type { Bank, Investment, Pocket, PocketMovement, Transaction } from "./types";
 
 function escapeCsvField(value: string): string {
   if (/[",\n;]/.test(value)) {
@@ -15,6 +16,8 @@ export function transactionsToCsv(
   transactions: Transaction[],
   banks: Bank[] = [],
   pockets: Pocket[] = [],
+  investments: Investment[] = [],
+  pocketMovements: PocketMovement[] = [],
 ): string {
   const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
 
@@ -37,19 +40,40 @@ export function transactionsToCsv(
   );
 
   const caixinhasCsv = toCsvBlock(
-    ["Caixinha", "Saldo guardado"],
-    pockets.map((p) => [escapeCsvField(p.nome), p.saldo.toFixed(2)]),
+    ["Caixinha", "Saldo guardado", "Rendimento"],
+    pockets.map((p) => [
+      escapeCsvField(p.nome),
+      p.saldo.toFixed(2),
+      computePocketRendimento(p, pocketMovements).toFixed(2),
+    ]),
   );
 
-  return [transacoesCsv, bancosCsv, caixinhasCsv].join("\n\n");
+  const investimentosCsv = toCsvBlock(
+    ["Investimento", "Tipo", "Valor investido", "Valor atual", "Rendimento", "Cotas"],
+    investments.map((i) => {
+      const valorAtual = i.saldoAtual ?? i.valorInvestido;
+      return [
+        escapeCsvField(i.nome),
+        i.tipo === "rendaVariavel" ? "Renda variável" : "Renda fixa",
+        i.valorInvestido.toFixed(2),
+        valorAtual.toFixed(2),
+        (valorAtual - i.valorInvestido).toFixed(2),
+        i.totalCotas ? String(i.totalCotas) : "",
+      ];
+    }),
+  );
+
+  return [transacoesCsv, bancosCsv, caixinhasCsv, investimentosCsv].join("\n\n");
 }
 
 export function downloadTransactionsCsv(
   transactions: Transaction[],
   banks: Bank[] = [],
   pockets: Pocket[] = [],
+  investments: Investment[] = [],
+  pocketMovements: PocketMovement[] = [],
 ): void {
-  const csv = transactionsToCsv(transactions, banks, pockets);
+  const csv = transactionsToCsv(transactions, banks, pockets, investments, pocketMovements);
   const blob = new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

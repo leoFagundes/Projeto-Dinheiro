@@ -60,5 +60,15 @@ export function useCategoryGoals() {
     await deleteDoc(doc(db, COLLECTION, id));
   }, []);
 
-  return { goals, loading, setGoal, removeGoal };
+  /** Mantém a meta acompanhando a categoria quando ela é renomeada. */
+  const renameGoalCategoria = useCallback(
+    async (nomeAntigo: string, nomeNovo: string) => {
+      const existing = goals.find((g) => g.categoria === nomeAntigo);
+      if (!existing) return;
+      await updateDoc(doc(db, COLLECTION, existing.id), { categoria: nomeNovo });
+    },
+    [goals],
+  );
+
+  return { goals, loading, setGoal, removeGoal, renameGoalCategoria };
 }

@@ -11,11 +11,19 @@ import {
   Plus,
   Tags,
   Trash2,
+  TrendingUp,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useCategories } from "@/lib/use-categories";
+import { useCategoryGoals } from "@/lib/use-category-goals";
 import { useBanks } from "@/lib/use-banks";
 import { usePockets } from "@/lib/use-pockets";
+import { useTransactions } from "@/lib/use-transactions";
+import { usePocketMovements } from "@/lib/use-pocket-movements";
+import { useBankPayments } from "@/lib/use-bank-payments";
+import { useInvestments } from "@/lib/use-investments";
+import { useInvestmentMovements } from "@/lib/use-investment-movements";
+import { computeBankSaldoConta } from "@/lib/derived";
 import { formatCurrency } from "@/lib/format";
 import { FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { PageFade } from "@/app/_components/PageFade";
@@ -23,7 +31,7 @@ import { ConfirmDialog } from "@/app/_components/ConfirmDialog";
 import { EmojiPickerSheet } from "@/app/_components/EmojiPickerSheet";
 import { BottomSheet } from "@/app/_components/BottomSheet";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
-import type { Bank, Category, Pocket, TransactionType } from "@/lib/types";
+import type { Bank, Category, Investment, InvestmentType, Pocket, TransactionType } from "@/lib/types";
 
 export default function ConfiguracoesPage() {
   return (
@@ -33,6 +41,7 @@ export default function ConfiguracoesPage() {
         <CategoriasSection />
         <BancosSection />
         <CaixinhasSection />
+        <InvestimentosSection />
         <ContaSection />
       </div>
     </PageFade>
@@ -42,14 +51,16 @@ export default function ConfiguracoesPage() {
 function SectionCard({
   icon: Icon,
   title,
+  id,
   children,
 }: {
   icon: React.ComponentType<{ size?: number }>;
   title: string;
+  id?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section>
+    <section id={id} className="scroll-mt-20">
       <h2 className="mb-3 flex items-center gap-2 text-sm font-medium text-ink-muted">
         <Icon size={16} />
         {title}
@@ -61,6 +72,7 @@ function SectionCard({
 
 function CategoriasSection() {
   const { categories, addCategory, removeCategory, updateCategory } = useCategories();
+  const { goals, removeGoal, renameGoalCategoria } = useCategoryGoals();
   const [nome, setNome] = useState("");
   const [tipo, setTipo] = useState<TransactionType>("despesa");
   const [icone, setIcone] = useState(FALLBACK_CATEGORY_ICON);
@@ -80,42 +92,54 @@ function CategoriasSection() {
     setIcone(FALLBACK_CATEGORY_ICON);
   }
 
+  async function handleUpdateCategory(id: string, input: { nome: string; icone: string }) {
+    const original = categories.find((c) => c.id === id);
+    await updateCategory(id, input);
+    if (original && original.nome !== input.nome) {
+      await renameGoalCategoria(original.nome, input.nome);
+    }
+  }
+
   const despesas = categories.filter((c) => c.tipo === "despesa");
   const receitas = categories.filter((c) => c.tipo === "receita");
 
   return (
     <SectionCard icon={Tags} title="Categorias">
-      <form onSubmit={handleAdd} className="mb-4 flex gap-2">
-        <button
-          type="button"
-          onClick={() => setPickingIcon(true)}
-          aria-label="Escolher ícone"
-          className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-bg text-lg transition-transform active:scale-95"
-        >
-          {icone}
-        </button>
-        <input
-          type="text"
-          placeholder="Nova categoria"
-          value={nome}
-          onChange={(event) => setNome(event.target.value)}
-          className="min-w-0 flex-1 rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
-        />
-        <select
-          value={tipo}
-          onChange={(event) => setTipo(event.target.value as TransactionType)}
-          className="rounded-2xl border border-border bg-bg px-3 py-2.5 text-sm outline-none transition-colors focus:border-accent"
-        >
-          <option value="despesa">Despesa</option>
-          <option value="receita">Receita</option>
-        </select>
-        <button
-          type="submit"
-          className="flex items-center justify-center rounded-2xl bg-accent px-3 text-white transition-transform active:scale-95 hover:bg-accent-strong"
-          aria-label="Adicionar categoria"
-        >
-          <Plus size={18} />
-        </button>
+      <form onSubmit={handleAdd} className="mb-4 flex flex-col gap-2">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setPickingIcon(true)}
+            aria-label="Escolher ícone"
+            className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-bg text-lg transition-transform active:scale-95"
+          >
+            {icone}
+          </button>
+          <input
+            type="text"
+            placeholder="Nova categoria"
+            value={nome}
+            onChange={(event) => setNome(event.target.value)}
+            className="min-w-0 flex-1 rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+          />
+        </div>
+        <div className="flex gap-2">
+          <select
+            value={tipo}
+            onChange={(event) => setTipo(event.target.value as TransactionType)}
+            className="min-w-0 flex-1 rounded-2xl border border-border bg-bg px-3 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+          >
+            <option value="despesa">Despesa</option>
+            <option value="receita">Receita</option>
+          </select>
+          <button
+            type="submit"
+            className="flex shrink-0 items-center justify-center rounded-2xl bg-accent px-4 text-white transition-transform active:scale-95 hover:bg-accent-strong"
+            aria-label="Adicionar categoria"
+          >
+            <Plus size={18} />
+          </button>
+        </div>
       </form>
 
       <EmojiPickerSheet
@@ -124,20 +148,20 @@ function CategoriasSection() {
         onSelect={setIcone}
       />
 
-      <div className="grid grid-cols-2 gap-4 text-sm">
+      <div className="flex flex-col gap-4 text-sm">
         <div>
           <p className="mb-2 text-xs text-ink-muted">Despesas</p>
           <ul className="flex flex-col gap-1.5">
             {despesas.map((c) => (
               <li
                 key={c.id}
-                className="flex items-center justify-between rounded-xl bg-bg px-3 py-2"
+                className="flex items-center justify-between gap-2 rounded-xl bg-bg px-3 py-2"
               >
-                <span className="flex items-center gap-2">
-                  <span>{c.icone ?? FALLBACK_CATEGORY_ICON}</span>
-                  {c.nome}
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="shrink-0">{c.icone ?? FALLBACK_CATEGORY_ICON}</span>
+                  <span className="truncate">{c.nome}</span>
                 </span>
-                <span className="flex items-center gap-2.5">
+                <span className="flex shrink-0 items-center gap-2.5">
                   <button
                     onClick={() => setEditing(c)}
                     className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
@@ -163,13 +187,13 @@ function CategoriasSection() {
             {receitas.map((c) => (
               <li
                 key={c.id}
-                className="flex items-center justify-between rounded-xl bg-bg px-3 py-2"
+                className="flex items-center justify-between gap-2 rounded-xl bg-bg px-3 py-2"
               >
-                <span className="flex items-center gap-2">
-                  <span>{c.icone ?? FALLBACK_CATEGORY_ICON}</span>
-                  {c.nome}
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="shrink-0">{c.icone ?? FALLBACK_CATEGORY_ICON}</span>
+                  <span className="truncate">{c.nome}</span>
                 </span>
-                <span className="flex items-center gap-2.5">
+                <span className="flex shrink-0 items-center gap-2.5">
                   <button
                     onClick={() => setEditing(c)}
                     className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
@@ -200,6 +224,8 @@ function CategoriasSection() {
         onConfirm={async () => {
           if (!removing) return;
           await removeCategory(removing.id);
+          const orphanGoal = goals.find((g) => g.categoria === removing.nome);
+          if (orphanGoal) await removeGoal(orphanGoal.id);
           toast.success("Categoria removida.");
           setRemoving(null);
         }}
@@ -208,7 +234,7 @@ function CategoriasSection() {
 
       <EditCategorySheet
         categoria={editing}
-        onSave={updateCategory}
+        onSave={handleUpdateCategory}
         onClose={() => setEditing(null)}
       />
     </SectionCard>
@@ -308,8 +334,13 @@ function EditCategoryFields({
 
 function BancosSection() {
   const { banks, addBank, updateBank, removeBank } = useBanks();
+  const { transactions } = useTransactions();
+  const { movements } = usePocketMovements();
+  const { payments } = useBankPayments();
+  const { movements: investmentMovements } = useInvestmentMovements();
   const [nome, setNome] = useState("");
   const [saldoDevedor, setSaldoDevedor] = useState(0);
+  const [saldoContaInicial, setSaldoContaInicial] = useState(0);
   const [removing, setRemoving] = useState<{ id: string; nome: string } | null>(null);
   const [editing, setEditing] = useState<Bank | null>(null);
 
@@ -319,68 +350,90 @@ function BancosSection() {
       toast.error("Dê um nome para o banco.");
       return;
     }
-    await addBank(nome.trim(), saldoDevedor);
+    await addBank(nome.trim(), saldoDevedor, saldoContaInicial);
     toast.success("Banco criado.");
     setNome("");
     setSaldoDevedor(0);
+    setSaldoContaInicial(0);
   }
 
   return (
-    <SectionCard icon={Landmark} title="Bancos">
-      <form onSubmit={handleAdd} className="mb-4 flex flex-wrap gap-2">
+    <SectionCard icon={Landmark} title="Bancos" id="bancos">
+      <form onSubmit={handleAdd} className="mb-4 flex flex-col gap-2">
         <input
           type="text"
           placeholder="Nome do banco"
           value={nome}
           onChange={(event) => setNome(event.target.value)}
-          className="min-w-0 flex-1 rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+          className="rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
         />
-        <CurrencyInput
-          value={saldoDevedor}
-          onChange={setSaldoDevedor}
-          placeholder="Saldo anterior"
-          className="w-32 rounded-2xl border border-border bg-bg px-3 py-2.5 text-sm outline-none transition-colors focus:border-accent"
-        />
-        <button
-          type="submit"
-          className="flex items-center justify-center rounded-2xl bg-accent px-3 text-white transition-transform active:scale-95 hover:bg-accent-strong"
-          aria-label="Adicionar banco"
-        >
-          <Plus size={18} />
-        </button>
+        <div className="flex gap-2">
+          <CurrencyInput
+            value={saldoContaInicial}
+            onChange={setSaldoContaInicial}
+            placeholder="Saldo em conta"
+            className="min-w-0 flex-1 rounded-2xl border border-border bg-bg px-3 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+          />
+          <CurrencyInput
+            value={saldoDevedor}
+            onChange={setSaldoDevedor}
+            placeholder="Saldo anterior"
+            className="min-w-0 flex-1 rounded-2xl border border-border bg-bg px-3 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+          />
+          <button
+            type="submit"
+            className="flex shrink-0 items-center justify-center rounded-2xl bg-accent px-4 text-white transition-transform active:scale-95 hover:bg-accent-strong"
+            aria-label="Adicionar banco"
+          >
+            <Plus size={18} />
+          </button>
+        </div>
       </form>
 
       {banks.length > 0 && (
         <ul className="flex flex-col gap-1.5 text-sm">
-          {banks.map((b) => (
-            <li
-              key={b.id}
-              className="flex items-center justify-between rounded-xl bg-bg px-3 py-2.5"
-            >
-              <span>{b.nome}</span>
-              <span className="flex items-center gap-3">
-                {b.saldoDevedor > 0 && (
-                  <span className="text-xs text-negative">
-                    saldo anterior: {formatCurrency(b.saldoDevedor)}
+          {banks.map((b) => {
+            const saldoConta = computeBankSaldoConta(
+              b,
+              transactions,
+              movements,
+              payments,
+              investmentMovements,
+            );
+            return (
+              <li key={b.id} className="rounded-xl bg-bg px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate">{b.nome}</span>
+                  <span className="flex shrink-0 items-center gap-2.5">
+                    <button
+                      onClick={() => setEditing(b)}
+                      className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
+                      aria-label="Editar banco"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      onClick={() => setRemoving({ id: b.id, nome: b.nome })}
+                      className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
+                      aria-label="Remover banco"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </span>
-                )}
-                <button
-                  onClick={() => setEditing(b)}
-                  className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
-                  aria-label="Editar banco"
-                >
-                  <Pencil size={14} />
-                </button>
-                <button
-                  onClick={() => setRemoving({ id: b.id, nome: b.nome })}
-                  className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
-                  aria-label="Remover banco"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </span>
-            </li>
-          ))}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ink-muted">
+                  <span className={saldoConta < 0 ? "text-negative" : "text-accent-strong"}>
+                    saldo em conta: {formatCurrency(saldoConta)}
+                  </span>
+                  {b.saldoDevedor > 0 && (
+                    <span className="text-negative">
+                      saldo anterior: {formatCurrency(b.saldoDevedor)}
+                    </span>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -410,7 +463,10 @@ function EditBankSheet({
   onClose,
 }: {
   banco: Bank | null;
-  onSave: (id: string, input: { nome: string; saldoDevedor: number }) => Promise<void>;
+  onSave: (
+    id: string,
+    input: { nome: string; saldoDevedor: number; saldoContaInicial?: number },
+  ) => Promise<void>;
   onClose: () => void;
 }) {
   return (
@@ -428,11 +484,15 @@ function EditBankFields({
   onClose,
 }: {
   banco: Bank;
-  onSave: (id: string, input: { nome: string; saldoDevedor: number }) => Promise<void>;
+  onSave: (
+    id: string,
+    input: { nome: string; saldoDevedor: number; saldoContaInicial?: number },
+  ) => Promise<void>;
   onClose: () => void;
 }) {
   const [nome, setNome] = useState(banco.nome);
   const [saldoDevedor, setSaldoDevedor] = useState(banco.saldoDevedor);
+  const [saldoContaInicial, setSaldoContaInicial] = useState(banco.saldoContaInicial ?? 0);
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -442,7 +502,11 @@ function EditBankFields({
     }
     setSaving(true);
     try {
-      await onSave(banco.id, { nome: nome.trim(), saldoDevedor });
+      await onSave(banco.id, {
+        nome: nome.trim(),
+        saldoDevedor,
+        saldoContaInicial: saldoContaInicial || undefined,
+      });
       toast.success("Banco atualizado.");
       onClose();
     } catch {
@@ -463,12 +527,22 @@ function EditBankFields({
           onChange={(event) => setNome(event.target.value)}
           className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
         />
-        <CurrencyInput
-          value={saldoDevedor}
-          onChange={setSaldoDevedor}
-          placeholder="Saldo anterior"
-          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
-        />
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          Saldo em conta (ajuste manual)
+          <CurrencyInput
+            value={saldoContaInicial}
+            onChange={setSaldoContaInicial}
+            className="rounded-2xl border border-border px-4 py-3 text-sm text-ink outline-none transition-colors focus:border-accent"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          Saldo anterior (dívida)
+          <CurrencyInput
+            value={saldoDevedor}
+            onChange={setSaldoDevedor}
+            className="rounded-2xl border border-border px-4 py-3 text-sm text-ink outline-none transition-colors focus:border-accent"
+          />
+        </label>
         <button
           onClick={handleSave}
           disabled={saving}
@@ -505,7 +579,7 @@ function CaixinhasSection() {
   }
 
   return (
-    <SectionCard icon={PiggyBank} title="Caixinhas">
+    <SectionCard icon={PiggyBank} title="Caixinhas" id="caixinhas">
       <form onSubmit={handleAdd} className="mb-4 flex flex-col gap-2">
         <input
           type="text"
@@ -778,6 +852,204 @@ function TransferSheet({
         </button>
       </div>
     </BottomSheet>
+  );
+}
+
+function InvestimentosSection() {
+  const { investments, addInvestment, updateInvestment, removeInvestment } = useInvestments();
+  const [nome, setNome] = useState("");
+  const [tipo, setTipo] = useState<InvestmentType>("rendaFixa");
+  const [removing, setRemoving] = useState<{ id: string; nome: string } | null>(null);
+  const [editing, setEditing] = useState<Investment | null>(null);
+
+  async function handleAdd(event: React.FormEvent) {
+    event.preventDefault();
+    if (!nome.trim()) {
+      toast.error("Dê um nome para o investimento.");
+      return;
+    }
+    await addInvestment(nome.trim(), tipo);
+    toast.success("Investimento criado.");
+    setNome("");
+    setTipo("rendaFixa");
+  }
+
+  return (
+    <SectionCard icon={TrendingUp} title="Investimentos" id="investimentos">
+      <form onSubmit={handleAdd} className="mb-4 flex flex-col gap-2">
+        <input
+          type="text"
+          placeholder="Nome (ex: Tesouro Selic, PETR4)"
+          value={nome}
+          onChange={(event) => setNome(event.target.value)}
+          className="rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+        />
+        <div className="flex gap-2">
+          <select
+            value={tipo}
+            onChange={(event) => setTipo(event.target.value as InvestmentType)}
+            className="min-w-0 flex-1 rounded-2xl border border-border bg-bg px-3 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+          >
+            <option value="rendaFixa">Renda fixa</option>
+            <option value="rendaVariavel">Renda variável</option>
+          </select>
+          <button
+            type="submit"
+            className="flex shrink-0 items-center justify-center rounded-2xl bg-accent px-4 text-white transition-transform active:scale-95 hover:bg-accent-strong"
+            aria-label="Adicionar investimento"
+          >
+            <Plus size={18} />
+          </button>
+        </div>
+      </form>
+
+      {investments.length > 0 ? (
+        <ul className="flex flex-col gap-1.5 text-sm">
+          {investments.map((inv) => (
+            <li
+              key={inv.id}
+              className="flex items-center justify-between gap-2 rounded-xl bg-bg px-3 py-2.5"
+            >
+              <span className="min-w-0">
+                <span className="block truncate">{inv.nome}</span>
+                <span className="text-xs text-ink-muted">
+                  {inv.tipo === "rendaVariavel" ? "Renda variável" : "Renda fixa"} ·{" "}
+                  {formatCurrency(inv.valorInvestido)}
+                  {inv.tipo === "rendaVariavel" && inv.totalCotas
+                    ? ` · ${inv.totalCotas} cotas`
+                    : ""}
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center gap-2.5">
+                <button
+                  onClick={() => setEditing(inv)}
+                  className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
+                  aria-label="Editar investimento"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  onClick={() => setRemoving({ id: inv.id, nome: inv.nome })}
+                  className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
+                  aria-label="Remover investimento"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      <p className="mt-3 text-xs text-ink-muted">
+        Aportes e resgates são feitos na aba Início, dentro de cada investimento.
+      </p>
+
+      <ConfirmDialog
+        open={removing !== null}
+        title="Remover investimento?"
+        description={`"${removing?.nome}" será removido, junto com o histórico de aportes.`}
+        confirmLabel="Remover"
+        danger
+        onConfirm={async () => {
+          if (!removing) return;
+          await removeInvestment(removing.id);
+          toast.success("Investimento removido.");
+          setRemoving(null);
+        }}
+        onCancel={() => setRemoving(null)}
+      />
+
+      <EditInvestmentSheet
+        investment={editing}
+        onSave={updateInvestment}
+        onClose={() => setEditing(null)}
+      />
+    </SectionCard>
+  );
+}
+
+function EditInvestmentSheet({
+  investment,
+  onSave,
+  onClose,
+}: {
+  investment: Investment | null;
+  onSave: (id: string, input: { nome: string; tipo: InvestmentType }) => Promise<void>;
+  onClose: () => void;
+}) {
+  return (
+    <BottomSheet open={investment !== null} onClose={onClose}>
+      {investment && (
+        <EditInvestmentFields
+          key={investment.id}
+          investment={investment}
+          onSave={onSave}
+          onClose={onClose}
+        />
+      )}
+    </BottomSheet>
+  );
+}
+
+function EditInvestmentFields({
+  investment,
+  onSave,
+  onClose,
+}: {
+  investment: Investment;
+  onSave: (id: string, input: { nome: string; tipo: InvestmentType }) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [nome, setNome] = useState(investment.nome);
+  const [tipo, setTipo] = useState<InvestmentType>(investment.tipo);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    if (!nome.trim()) {
+      toast.error("Dê um nome para o investimento.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(investment.id, { nome: nome.trim(), tipo });
+      toast.success("Investimento atualizado.");
+      onClose();
+    } catch {
+      toast.error("Não foi possível atualizar o investimento.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <p className="mb-4 font-medium">Editar investimento</p>
+      <div className="flex flex-col gap-3">
+        <input
+          type="text"
+          placeholder="Nome"
+          value={nome}
+          onChange={(event) => setNome(event.target.value)}
+          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        />
+        <select
+          value={tipo}
+          onChange={(event) => setTipo(event.target.value as InvestmentType)}
+          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        >
+          <option value="rendaFixa">Renda fixa</option>
+          <option value="rendaVariavel">Renda variável</option>
+        </select>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60"
+        >
+          Salvar
+        </button>
+      </div>
+    </>
   );
 }
 

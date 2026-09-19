@@ -3,42 +3,40 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { PiggyBank, Plus } from "lucide-react";
+import { Plus, TrendingUp } from "lucide-react";
 import { EmptyState } from "@/app/_components/EmptyState";
 import { BottomSheet } from "@/app/_components/BottomSheet";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { computePocketRendimento } from "@/lib/derived";
-import type { Bank, Pocket, PocketMovement } from "@/lib/types";
+import type { Bank, Investment, InvestmentMovement } from "@/lib/types";
 
-export function PocketsSection({
-  pockets,
-  banks,
+export function InvestmentsSection({
+  investments,
   movements,
-  onAdjust,
-  onMoveFunds,
+  banks,
+  onMove,
   onRegistrarRendimento,
 }: {
-  pockets: Pocket[];
+  investments: Investment[];
+  movements: InvestmentMovement[];
   banks: Bank[];
-  movements: PocketMovement[];
-  onAdjust: (id: string, delta: number) => Promise<void>;
-  onMoveFunds: (
-    pocketId: string,
-    bancoId: string,
-    tipo: "deposito" | "retirada",
+  onMove: (
+    id: string,
+    tipo: "aporte" | "resgate",
     valor: number,
+    cotas?: number,
+    bancoId?: string,
   ) => Promise<void>;
-  onRegistrarRendimento: (pocketId: string, novoSaldo: number) => Promise<void>;
+  onRegistrarRendimento: (investimentoId: string, novoSaldoAtual: number) => Promise<void>;
 }) {
-  const [adjusting, setAdjusting] = useState<Pocket | null>(null);
+  const [selected, setSelected] = useState<Investment | null>(null);
 
-  if (pockets.length === 0) {
+  if (investments.length === 0) {
     return (
       <EmptyState
-        icon={PiggyBank}
-        title="Nenhuma caixinha ainda"
-        description="Crie caixinhas em Configurações para separar dinheiro guardado."
+        icon={TrendingUp}
+        title="Nenhum investimento ainda"
+        description="Cadastre em Configurações pra controlar quanto você aportou em renda fixa ou variável."
       />
     );
   }
@@ -46,27 +44,25 @@ export function PocketsSection({
   return (
     <div className="flex flex-col gap-3">
       <ul className="grid grid-cols-2 gap-3">
-        {pockets.map((pocket) => {
-          const percent = pocket.metaValor
-            ? Math.min((pocket.saldo / pocket.metaValor) * 100, 100)
-            : null;
-          const rendimento = computePocketRendimento(pocket, movements);
+        {investments.map((investimento) => {
+          const valorAtual = investimento.saldoAtual ?? investimento.valorInvestido;
+          const rendimento = valorAtual - investimento.valorInvestido;
           return (
-            <li key={pocket.id}>
+            <li key={investimento.id}>
               <button
-                onClick={() => setAdjusting(pocket)}
-                aria-label={`Adicionar ou retirar de ${pocket.nome}`}
+                onClick={() => setSelected(investimento)}
+                aria-label={`Aportar ou resgatar de ${investimento.nome}`}
                 className="relative w-full rounded-card bg-surface p-4 text-left transition-transform active:scale-[0.98]"
               >
                 <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-accent-soft text-accent-strong">
                   <Plus size={14} />
                 </span>
                 <p className="flex items-center gap-1.5 pr-6 text-sm text-ink-muted">
-                  <PiggyBank size={14} />
-                  {pocket.nome}
+                  <TrendingUp size={14} />
+                  {investimento.nome}
                 </p>
                 <p className="mt-1 text-lg font-semibold text-accent-strong">
-                  {formatCurrency(pocket.saldo)}
+                  {formatCurrency(valorAtual)}
                 </p>
                 {rendimento !== 0 && (
                   <p className={`text-[11px] ${rendimento > 0 ? "text-accent-strong" : "text-negative"}`}>
@@ -74,19 +70,12 @@ export function PocketsSection({
                     {formatCurrency(rendimento)}
                   </p>
                 )}
-                {percent !== null && (
-                  <>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg">
-                      <div
-                        className="h-full rounded-full bg-accent transition-all duration-500 ease-out"
-                        style={{ width: `${percent}%` }}
-                      />
-                    </div>
-                    <p className="mt-1 text-[11px] text-ink-muted">
-                      meta: {formatCurrency(pocket.metaValor!)}
-                    </p>
-                  </>
-                )}
+                <p className="mt-1 text-[11px] text-ink-muted">
+                  {investimento.tipo === "rendaVariavel" ? "Renda variável" : "Renda fixa"}
+                  {investimento.tipo === "rendaVariavel" && investimento.totalCotas
+                    ? ` · ${investimento.totalCotas} cotas`
+                    : ""}
+                </p>
               </button>
             </li>
           );
@@ -94,57 +83,54 @@ export function PocketsSection({
       </ul>
 
       <Link
-        href="/configuracoes#caixinhas"
+        href="/configuracoes#investimentos"
         className="self-start text-sm text-accent-strong transition-transform active:scale-95 hover:underline"
       >
-        Gerenciar caixinhas
+        Gerenciar investimentos
       </Link>
 
-      <AdjustPocketSheet
-        pocket={adjusting}
-        banks={banks}
+      <MoveInvestmentSheet
+        investment={selected}
         movements={movements}
-        onAdjust={onAdjust}
-        onMoveFunds={onMoveFunds}
+        banks={banks}
+        onMove={onMove}
         onRegistrarRendimento={onRegistrarRendimento}
-        onClose={() => setAdjusting(null)}
+        onClose={() => setSelected(null)}
       />
     </div>
   );
 }
 
-function AdjustPocketSheet({
-  pocket,
-  banks,
+function MoveInvestmentSheet({
+  investment,
   movements,
-  onAdjust,
-  onMoveFunds,
+  banks,
+  onMove,
   onRegistrarRendimento,
   onClose,
 }: {
-  pocket: Pocket | null;
+  investment: Investment | null;
+  movements: InvestmentMovement[];
   banks: Bank[];
-  movements: PocketMovement[];
-  onAdjust: (id: string, delta: number) => Promise<void>;
-  onMoveFunds: (
-    pocketId: string,
-    bancoId: string,
-    tipo: "deposito" | "retirada",
+  onMove: (
+    id: string,
+    tipo: "aporte" | "resgate",
     valor: number,
+    cotas?: number,
+    bancoId?: string,
   ) => Promise<void>;
-  onRegistrarRendimento: (pocketId: string, novoSaldo: number) => Promise<void>;
+  onRegistrarRendimento: (investimentoId: string, novoSaldoAtual: number) => Promise<void>;
   onClose: () => void;
 }) {
   return (
-    <BottomSheet open={pocket !== null} onClose={onClose}>
-      {pocket && (
-        <AdjustPocketFields
-          key={pocket.id}
-          pocket={pocket}
+    <BottomSheet open={investment !== null} onClose={onClose}>
+      {investment && (
+        <MoveInvestmentFields
+          key={investment.id}
+          investment={investment}
+          movements={movements.filter((m) => m.investimentoId === investment.id)}
           banks={banks}
-          movements={movements.filter((m) => m.pocketId === pocket.id)}
-          onAdjust={onAdjust}
-          onMoveFunds={onMoveFunds}
+          onMove={onMove}
           onRegistrarRendimento={onRegistrarRendimento}
           onClose={onClose}
         />
@@ -153,34 +139,36 @@ function AdjustPocketSheet({
   );
 }
 
-function AdjustPocketFields({
-  pocket,
-  banks,
+function MoveInvestmentFields({
+  investment,
   movements,
-  onAdjust,
-  onMoveFunds,
+  banks,
+  onMove,
   onRegistrarRendimento,
   onClose,
 }: {
-  pocket: Pocket;
+  investment: Investment;
+  movements: InvestmentMovement[];
   banks: Bank[];
-  movements: PocketMovement[];
-  onAdjust: (id: string, delta: number) => Promise<void>;
-  onMoveFunds: (
-    pocketId: string,
-    bancoId: string,
-    tipo: "deposito" | "retirada",
+  onMove: (
+    id: string,
+    tipo: "aporte" | "resgate",
     valor: number,
+    cotas?: number,
+    bancoId?: string,
   ) => Promise<void>;
-  onRegistrarRendimento: (pocketId: string, novoSaldo: number) => Promise<void>;
+  onRegistrarRendimento: (investimentoId: string, novoSaldoAtual: number) => Promise<void>;
   onClose: () => void;
 }) {
+  const isVariavel = investment.tipo === "rendaVariavel";
   const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
-  const rendimento = computePocketRendimento(pocket, movements);
-  const [modo, setModo] = useState<"adicionar" | "retirar" | "rendimento">("adicionar");
-  const [bancoId, setBancoId] = useState("");
+  const valorAtual = investment.saldoAtual ?? investment.valorInvestido;
+  const rendimento = valorAtual - investment.valorInvestido;
+  const [modo, setModo] = useState<"aporte" | "resgate" | "rendimento">("aporte");
   const [valor, setValor] = useState(0);
-  const [saldoInformado, setSaldoInformado] = useState(pocket.saldo);
+  const [cotas, setCotas] = useState("");
+  const [bancoId, setBancoId] = useState("");
+  const [saldoInformado, setSaldoInformado] = useState(valorAtual);
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -191,7 +179,7 @@ function AdjustPocketFields({
       }
       setSaving(true);
       try {
-        await onRegistrarRendimento(pocket.id, saldoInformado);
+        await onRegistrarRendimento(investment.id, saldoInformado);
         toast.success("Rendimento atualizado.");
         onClose();
       } catch (error) {
@@ -206,24 +194,22 @@ function AdjustPocketFields({
       toast.error("Informe um valor válido.");
       return;
     }
-    if (modo === "retirar" && valor > pocket.saldo) {
-      toast.error("Saldo insuficiente nessa caixinha.");
+    if (modo === "resgate" && valor > investment.valorInvestido) {
+      toast.error("Valor maior que o total investido.");
       return;
     }
 
     setSaving(true);
     try {
-      if (bancoId) {
-        await onMoveFunds(pocket.id, bancoId, modo === "adicionar" ? "deposito" : "retirada", valor);
-      } else {
-        await onAdjust(pocket.id, modo === "adicionar" ? valor : -valor);
-      }
-      toast.success(modo === "adicionar" ? "Valor adicionado." : "Valor retirado.");
+      const cotasNum = isVariavel && cotas ? Number(cotas) : undefined;
+      await onMove(investment.id, modo, valor, cotasNum, bancoId || undefined);
+      toast.success(modo === "aporte" ? "Aporte registrado." : "Resgate registrado.");
       setValor(0);
-      setModo("adicionar");
+      setCotas("");
+      setModo("aporte");
       onClose();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a caixinha.");
+      toast.error(error instanceof Error ? error.message : "Não foi possível registrar.");
     } finally {
       setSaving(false);
     }
@@ -231,43 +217,49 @@ function AdjustPocketFields({
 
   return (
     <>
-      <p className="font-medium">{pocket.nome}</p>
-      {rendimento !== 0 && (
-        <p className={`mb-3 text-xs ${rendimento > 0 ? "text-accent-strong" : "text-negative"}`}>
-          Total aportado: {formatCurrency(pocket.saldo - rendimento)} · Rendeu:{" "}
-          {rendimento > 0 ? "+" : ""}
-          {formatCurrency(rendimento)}
-        </p>
-      )}
+      <p className="font-medium">{investment.nome}</p>
+      <p className="mb-4 text-xs text-ink-muted">
+        Total investido: {formatCurrency(investment.valorInvestido)}
+        {isVariavel && investment.totalCotas ? ` · ${investment.totalCotas} cotas` : ""}
+        {rendimento !== 0 && (
+          <>
+            {" · "}
+            <span className={rendimento > 0 ? "text-accent-strong" : "text-negative"}>
+              rendeu {rendimento > 0 ? "+" : ""}
+              {formatCurrency(rendimento)}
+            </span>
+          </>
+        )}
+      </p>
 
-      <div className="mt-4 grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <button
           type="button"
-          onClick={() => setModo("adicionar")}
+          onClick={() => setModo("aporte")}
           className={`rounded-2xl border px-3 py-2.5 text-xs font-medium transition-colors ${
-            modo === "adicionar"
+            modo === "aporte"
               ? "border-accent bg-accent-soft text-accent-strong"
               : "border-border text-ink-muted"
           }`}
         >
-          Adicionar
+          Aportar
         </button>
         <button
           type="button"
-          onClick={() => setModo("retirar")}
+          onClick={() => setModo("resgate")}
           className={`rounded-2xl border px-3 py-2.5 text-xs font-medium transition-colors ${
-            modo === "retirar"
+            modo === "resgate"
               ? "border-negative bg-negative-soft text-negative"
               : "border-border text-ink-muted"
           }`}
         >
-          Retirar
+          Resgatar
         </button>
         <button
           type="button"
           onClick={() => {
             setModo("rendimento");
-            setSaldoInformado(pocket.saldo);
+            setSaldoInformado(valorAtual);
           }}
           className={`rounded-2xl border px-3 py-2.5 text-xs font-medium transition-colors ${
             modo === "rendimento"
@@ -282,8 +274,8 @@ function AdjustPocketFields({
       {modo === "rendimento" ? (
         <>
           <p className="mt-3 text-xs text-ink-muted">
-            Informe o saldo atual real dessa caixinha (depois de render). A diferença vira
-            rendimento, sem contar como novo depósito.
+            Informe o valor atual real desse investimento (cotação/saldo do banco). A diferença
+            vira rendimento, sem contar como novo aporte.
           </p>
           <CurrencyInput
             value={saldoInformado}
@@ -296,8 +288,21 @@ function AdjustPocketFields({
           <CurrencyInput
             value={valor}
             onChange={setValor}
+            placeholder={isVariavel ? "Valor total pago pelas cotas" : "Valor"}
             className="mt-3 w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
           />
+
+          {isVariavel && (
+            <input
+              type="number"
+              min="0"
+              step="0.000001"
+              placeholder="Quantidade de cotas/ações"
+              value={cotas}
+              onChange={(event) => setCotas(event.target.value)}
+              className="mt-2 w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+            />
+          )}
 
           {banks.length > 0 && (
             <select
@@ -308,7 +313,7 @@ function AdjustPocketFields({
               <option value="">Sem banco vinculado</option>
               {banks.map((banco) => (
                 <option key={banco.id} value={banco.id}>
-                  {modo === "adicionar" ? `Sai de: ${banco.nome}` : `Vai para: ${banco.nome}`}
+                  {modo === "aporte" ? `Sai de: ${banco.nome}` : `Vai para: ${banco.nome}`}
                 </option>
               ))}
             </select>
@@ -330,13 +335,13 @@ function AdjustPocketFields({
           <ul className="flex max-h-48 flex-col gap-1.5 overflow-y-auto">
             {movements.map((movimento) => {
               const isNegative =
-                movimento.tipo === "retirada" ||
+                movimento.tipo === "resgate" ||
                 (movimento.tipo === "rendimento" && movimento.valor < 0);
               const label =
-                movimento.tipo === "deposito"
-                  ? "Adicionado"
-                  : movimento.tipo === "retirada"
-                    ? "Retirado"
+                movimento.tipo === "aporte"
+                  ? "Aporte"
+                  : movimento.tipo === "resgate"
+                    ? "Resgate"
                     : "Rendimento";
               return (
                 <li
@@ -345,6 +350,7 @@ function AdjustPocketFields({
                 >
                   <span>
                     {formatDate(movimento.data)} · {label}
+                    {movimento.cotas ? ` · ${movimento.cotas} cotas` : ""}
                     {movimento.bancoId && bankNameById.get(movimento.bancoId)
                       ? ` · ${bankNameById.get(movimento.bancoId)}`
                       : ""}

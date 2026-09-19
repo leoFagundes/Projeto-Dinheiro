@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { Landmark } from "lucide-react";
+import { Landmark, Receipt } from "lucide-react";
 import { EmptyState } from "@/app/_components/EmptyState";
 import { BottomSheet } from "@/app/_components/BottomSheet";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
@@ -13,13 +13,15 @@ import type { Bank } from "@/lib/types";
 export function BankDebtSection({
   banks,
   gastosMesPorBanco,
-  onAdjust,
+  saldoContaPorBanco,
+  onPayFatura,
 }: {
   banks: Bank[];
   gastosMesPorBanco: Map<string, number>;
-  onAdjust: (id: string, delta: number) => Promise<void>;
+  saldoContaPorBanco: Map<string, number>;
+  onPayFatura: (id: string, valor: number) => Promise<void>;
 }) {
-  const [adjusting, setAdjusting] = useState<Bank | null>(null);
+  const [paying, setPaying] = useState<Bank | null>(null);
 
   if (banks.length === 0) {
     return (
@@ -33,135 +35,155 @@ export function BankDebtSection({
 
   return (
     <div className="flex flex-col gap-3">
-      <ul className="flex flex-col gap-2">
-        {banks.map((banco) => {
-          const fatura = gastosMesPorBanco.get(banco.id) ?? 0;
-          return (
-            <li key={banco.id}>
-              <button
-                onClick={() => setAdjusting(banco)}
-                className="flex w-full items-center justify-between rounded-2xl bg-bg px-4 py-3 text-left transition-transform active:scale-[0.98]"
-              >
-                <span className="flex items-center gap-2 text-sm">
-                  <Landmark size={16} className="text-ink-muted" />
-                  <span>
-                    {banco.nome}
-                    {banco.saldoDevedor > 0 && (
-                      <span className="block text-xs text-ink-muted">
-                        + {formatCurrency(banco.saldoDevedor)} de saldo anterior
+      <div className="rounded-card bg-surface p-4">
+        <ul className="flex flex-col gap-2">
+          {banks.map((banco) => {
+            const fatura = gastosMesPorBanco.get(banco.id) ?? 0;
+            const saldoConta = saldoContaPorBanco.get(banco.id) ?? 0;
+            const totalDevido = fatura + banco.saldoDevedor;
+            return (
+              <li key={banco.id} className="rounded-2xl bg-bg px-4 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-2 text-sm">
+                    <Landmark size={16} className="shrink-0 text-ink-muted" />
+                    <span className="min-w-0">
+                      <span className="block truncate">{banco.nome}</span>
+                      <span
+                        className={`block text-xs ${saldoConta < 0 ? "text-negative" : "text-ink-muted"}`}
+                      >
+                        saldo em conta: {formatCurrency(saldoConta)}
                       </span>
-                    )}
+                      {banco.saldoDevedor > 0 && (
+                        <span className="block text-xs text-ink-muted">
+                          + {formatCurrency(banco.saldoDevedor)} de saldo anterior
+                        </span>
+                      )}
+                    </span>
                   </span>
-                </span>
-                <span className="text-right">
-                  <span className="block text-sm font-medium text-negative">
-                    {formatCurrency(fatura)}
+                  <span className="shrink-0 text-right">
+                    <span className="block text-sm font-medium text-negative">
+                      {formatCurrency(fatura)}
+                    </span>
+                    <span className="block text-[11px] text-ink-muted">fatura deste mês</span>
                   </span>
-                  <span className="block text-[11px] text-ink-muted">fatura deste mês</span>
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+                </div>
+
+                {totalDevido > 0 && (
+                  <button
+                    onClick={() => setPaying(banco)}
+                    className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-accent bg-accent-soft px-3 py-2 text-xs font-medium text-accent-strong transition-transform active:scale-[0.98] hover:bg-accent/20"
+                  >
+                    <Receipt size={14} />
+                    Pagar fatura ({formatCurrency(totalDevido)})
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
 
       <Link
-        href="/configuracoes"
+        href="/configuracoes#bancos"
         className="self-start text-sm text-accent-strong transition-transform active:scale-95 hover:underline"
       >
         Gerenciar bancos
       </Link>
 
-      <AdjustDebtSheet banco={adjusting} onAdjust={onAdjust} onClose={() => setAdjusting(null)} />
+      <PayFaturaSheet
+        banco={paying}
+        totalDevido={paying ? (gastosMesPorBanco.get(paying.id) ?? 0) + paying.saldoDevedor : 0}
+        onPayFatura={onPayFatura}
+        onClose={() => setPaying(null)}
+      />
     </div>
   );
 }
 
-function AdjustDebtSheet({
+function PayFaturaSheet({
   banco,
-  onAdjust,
+  totalDevido,
+  onPayFatura,
   onClose,
 }: {
   banco: Bank | null;
-  onAdjust: (id: string, delta: number) => Promise<void>;
+  totalDevido: number;
+  onPayFatura: (id: string, valor: number) => Promise<void>;
   onClose: () => void;
 }) {
-  const [modo, setModo] = useState<"divida" | "pagamento">("divida");
-  const [valor, setValor] = useState(0);
+  return (
+    <BottomSheet open={banco !== null} onClose={onClose}>
+      {banco && (
+        <PayFaturaFields
+          key={banco.id}
+          banco={banco}
+          totalDevido={totalDevido}
+          onPayFatura={onPayFatura}
+          onClose={onClose}
+        />
+      )}
+    </BottomSheet>
+  );
+}
+
+function PayFaturaFields({
+  banco,
+  totalDevido,
+  onPayFatura,
+  onClose,
+}: {
+  banco: Bank;
+  totalDevido: number;
+  onPayFatura: (id: string, valor: number) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [valor, setValor] = useState(totalDevido);
   const [saving, setSaving] = useState(false);
 
-  async function handleSave() {
-    if (!banco) return;
+  async function handleConfirm() {
     if (!valor || valor <= 0) {
       toast.error("Informe um valor válido.");
       return;
     }
-    if (modo === "pagamento" && valor > banco.saldoDevedor) {
-      toast.error("O valor é maior que o saldo anterior.");
+    if (valor > totalDevido) {
+      toast.error("O valor é maior que o total devido.");
       return;
     }
 
     setSaving(true);
     try {
-      await onAdjust(banco.id, modo === "divida" ? valor : -valor);
-      toast.success(modo === "divida" ? "Saldo anterior atualizado." : "Pagamento registrado.");
-      setValor(0);
-      setModo("divida");
+      await onPayFatura(banco.id, valor);
+      toast.success("Pagamento registrado — saiu do saldo em conta.");
       onClose();
     } catch {
-      toast.error("Não foi possível atualizar o banco.");
+      toast.error("Não foi possível registrar o pagamento.");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <BottomSheet open={banco !== null} onClose={onClose}>
-      <p className="font-medium">{banco?.nome}</p>
+    <>
+      <p className="mb-1 font-medium">Pagar fatura — {banco.nome}</p>
       <p className="mb-4 text-xs text-ink-muted">
-        A fatura do mês é calculada a partir das despesas vinculadas a este banco. Use os
-        botões abaixo só para ajustar um saldo anterior (dívida que não veio de uma
-        transação registrada aqui).
+        Total devido: {formatCurrency(totalDevido)} (fatura do mês + saldo anterior). Esse valor
+        sai do saldo em conta do banco. Pra corrigir manualmente o saldo anterior, use o botão de
+        editar em Configurações → Bancos.
       </p>
-
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => setModo("divida")}
-          className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition-colors ${
-            modo === "divida"
-              ? "border-negative bg-negative-soft text-negative"
-              : "border-border text-ink-muted"
-          }`}
-        >
-          Adicionar saldo
-        </button>
-        <button
-          type="button"
-          onClick={() => setModo("pagamento")}
-          className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition-colors ${
-            modo === "pagamento"
-              ? "border-accent bg-accent-soft text-accent-strong"
-              : "border-border text-ink-muted"
-          }`}
-        >
-          Registrar pagamento
-        </button>
-      </div>
 
       <CurrencyInput
         value={valor}
         onChange={setValor}
-        className="mt-3 w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        className="w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
       />
 
       <button
-        onClick={handleSave}
+        onClick={handleConfirm}
         disabled={saving}
         className="mt-3 w-full rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60"
       >
-        Confirmar
+        Confirmar pagamento
       </button>
-    </BottomSheet>
+    </>
   );
 }

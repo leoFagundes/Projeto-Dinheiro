@@ -2,12 +2,18 @@ import { Money } from "@/app/_components/Money";
 import { formatCurrency } from "@/lib/format";
 
 export function SummaryCards({
-  saldoAtual,
+  patrimonio,
   receitasMes,
   despesasMes,
   variacaoDespesas,
 }: {
-  saldoAtual: number;
+  patrimonio: {
+    contas: number;
+    caixinhas: number;
+    investimentos: number;
+    dividas: number;
+    total: number;
+  };
   receitasMes: number;
   despesasMes: number;
   variacaoDespesas: number | null;
@@ -15,10 +21,20 @@ export function SummaryCards({
   return (
     <div className="flex flex-col gap-3">
       <div className="rounded-card bg-surface p-5">
-        <p className="text-sm text-ink-muted">Saldo atual</p>
+        <p className="text-sm text-ink-muted">Patrimônio</p>
         <p className="mt-1 text-3xl font-semibold">
-          <Money value={saldoAtual} />
+          <Money value={patrimonio.total} />
         </p>
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-muted">
+          <span>Contas: {formatCurrency(patrimonio.contas)}</span>
+          <span>Caixinhas: {formatCurrency(patrimonio.caixinhas)}</span>
+          {patrimonio.investimentos > 0 && (
+            <span>Investimentos: {formatCurrency(patrimonio.investimentos)}</span>
+          )}
+          {patrimonio.dividas > 0 && (
+            <span className="text-negative">Fatura: -{formatCurrency(patrimonio.dividas)}</span>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

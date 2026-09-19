@@ -1,5 +1,19 @@
-import { addMonthsToKey, clampDayToMonth, currentMonthKey, monthKeyOfIsoDate } from "./format";
-import type { Bank, Transaction } from "./types";
+import {
+  addMonthsToKey,
+  clampDayToMonth,
+  currentMonthKey,
+  monthKeyOfIsoDate,
+  todayIsoDate,
+} from "./format";
+import type {
+  Bank,
+  BankPayment,
+  Investment,
+  InvestmentMovement,
+  Pocket,
+  PocketMovement,
+  Transaction,
+} from "./types";
 
 export type CalendarEvent = {
   id: string;
@@ -13,10 +27,6 @@ export type CalendarEvent = {
 
 function signedValue(t: Transaction): number {
   return t.tipo === "receita" ? t.valor : -t.valor;
-}
-
-export function computeSaldoAtual(transactions: Transaction[]): number {
-  return transactions.reduce((sum, t) => sum + signedValue(t), 0);
 }
 
 export function computeMonthTotals(transactions: Transaction[], monthKey: string) {
@@ -88,6 +98,89 @@ export function computeBankBreakdown(
 }
 
 /**
+ * Saldo em conta de um banco: base ajustada manualmente + receitas recebidas
+ * nele + retiradas de caixinhas/resgates de investimento de volta pra conta,
+ * menos despesas no débito (saem da conta na hora), depósitos em caixinhas,
+ * aportes em investimentos e pagamentos de fatura feitos a partir dele.
+ * Despesas no crédito não entram aqui — elas compõem a fatura, cobrada depois.
+ */
+export function computeBankSaldoConta(
+  bank: Bank,
+  transactions: Transaction[],
+  movements: PocketMovement[],
+  payments: BankPayment[] = [],
+  investmentMovements: InvestmentMovement[] = [],
+): number {
+  let saldo = bank.saldoContaInicial ?? 0;
+  for (const t of transactions) {
+    if (t.bancoId !== bank.id) continue;
+    if (t.tipo === "receita") saldo += t.valor;
+    else if (t.formaPagamento === "debito") saldo -= t.valor;
+  }
+  for (const m of movements) {
+    if (m.bancoId !== bank.id) continue;
+    saldo += m.tipo === "retirada" ? m.valor : -m.valor;
+  }
+  for (const p of payments) {
+    if (p.bancoId !== bank.id) continue;
+    saldo -= p.valor;
+  }
+  for (const m of investmentMovements) {
+    if (m.bancoId !== bank.id) continue;
+    saldo += m.tipo === "resgate" ? m.valor : -m.valor;
+  }
+  return saldo;
+}
+
+/**
+ * Patrimônio líquido "de verdade": o que está em conta nos bancos + guardado
+ * em caixinhas + aportado em investimentos (custo, não cotação de mercado),
+ * menos as dívidas de cartão (saldo anterior + fatura do mês corrente).
+ */
+export function computePatrimonio(
+  banks: Bank[],
+  pockets: Pocket[],
+  investments: Investment[],
+  transactions: Transaction[],
+  pocketMovements: PocketMovement[],
+  bankPayments: BankPayment[],
+  investmentMovements: InvestmentMovement[],
+): { contas: number; caixinhas: number; investimentos: number; dividas: number; total: number } {
+  const contas = banks.reduce(
+    (sum, b) =>
+      sum +
+      computeBankSaldoConta(b, transactions, pocketMovements, bankPayments, investmentMovements),
+    0,
+  );
+  const caixinhas = pockets.reduce((sum, p) => sum + p.saldo, 0);
+  const investimentos = investments.reduce((sum, i) => sum + (i.saldoAtual ?? i.valorInvestido), 0);
+  const thisMonth = currentMonthKey();
+  const faturaMes = computeBankBreakdown(transactions, thisMonth, banks).reduce(
+    (sum, item) => sum + item.total,
+    0,
+  );
+  const saldoAnteriorTotal = banks.reduce((sum, b) => sum + b.saldoDevedor, 0);
+  const dividas = faturaMes + saldoAnteriorTotal;
+  return {
+    contas,
+    caixinhas,
+    investimentos,
+    dividas,
+    total: contas + caixinhas + investimentos - dividas,
+  };
+}
+
+/**
+ * Quanto uma caixinha já rendeu: soma dos movimentos "rendimento" (pode ser
+ * negativo). O total aportado (sem contar o rendimento) é `saldo - rendimento`.
+ */
+export function computePocketRendimento(pocket: Pocket, movements: PocketMovement[]): number {
+  return movements
+    .filter((m) => m.pocketId === pocket.id && m.tipo === "rendimento")
+    .reduce((sum, m) => sum + m.valor, 0);
+}
+
+/**
  * Eventos (reais + recorrências projetadas) de um mês, para o calendário.
  * Transações já existentes (inclusive parcelas futuras já geradas) entram
  * como estão; templates recorrentes sem instância naquele mês ainda são
@@ -136,6 +229,23 @@ export function computeMonthEvents(
   }
 
   return events.sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0));
+}
+
+/** Eventos (reais + recorrências projetadas) dos próximos `days` dias, a partir de hoje. */
+export function computeUpcomingEvents(transactions: Transaction[], days = 7): CalendarEvent[] {
+  const start = todayIsoDate();
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() + days - 1);
+  const end = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
+
+  const startMonth = monthKeyOfIsoDate(start);
+  const endMonth = monthKeyOfIsoDate(end);
+  const monthsToCheck = startMonth === endMonth ? [startMonth] : [startMonth, endMonth];
+
+  return monthsToCheck
+    .flatMap((monthKey) => computeMonthEvents(transactions, monthKey))
+    .filter((event) => event.data >= start && event.data <= end)
+    .sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0));
 }
 
 export function computeBalanceTrend(

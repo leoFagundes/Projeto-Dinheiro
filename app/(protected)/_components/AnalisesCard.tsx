@@ -3,14 +3,11 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { CategoryPieChart, BalanceTrendChart } from "./Charts";
-import { BankDebtSection } from "./BankDebtSection";
-import type { Bank } from "@/lib/types";
 
-type Tab = "categorias" | "bancos" | "evolucao";
+type Tab = "categorias" | "evolucao";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "categorias", label: "Categorias" },
-  { id: "bancos", label: "Bancos" },
   { id: "evolucao", label: "Evolução" },
 ];
 
@@ -18,24 +15,18 @@ export function AnalisesCard({
   categoryBreakdown,
   colorByCategoria,
   iconByCategoria,
-  banks,
-  gastosMesPorBanco,
-  onAdjustBanco,
   balanceTrend,
 }: {
   categoryBreakdown: { categoria: string; total: number }[];
   colorByCategoria: Map<string, string>;
   iconByCategoria: Map<string, string>;
-  banks: Bank[];
-  gastosMesPorBanco: Map<string, number>;
-  onAdjustBanco: (id: string, delta: number) => Promise<void>;
   balanceTrend: { monthKey: string; saldo: number }[];
 }) {
   const [tab, setTab] = useState<Tab>("categorias");
 
   return (
     <div className="rounded-card bg-surface p-4">
-      <div className="mb-4 grid grid-cols-3 gap-1.5">
+      <div className="mb-4 grid grid-cols-2 gap-1.5">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
@@ -64,13 +55,6 @@ export function AnalisesCard({
               data={categoryBreakdown}
               colorByCategoria={colorByCategoria}
               iconByCategoria={iconByCategoria}
-            />
-          )}
-          {tab === "bancos" && (
-            <BankDebtSection
-              banks={banks}
-              gastosMesPorBanco={gastosMesPorBanco}
-              onAdjust={onAdjustBanco}
             />
           )}
           {tab === "evolucao" && <BalanceTrendChart data={balanceTrend} />}

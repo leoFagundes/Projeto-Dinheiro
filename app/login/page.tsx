@@ -10,11 +10,11 @@ import { useAuth } from "@/lib/auth-context";
 import { PageFade } from "@/app/_components/PageFade";
 
 export default function LoginPage() {
-  const { user, loading, signInWithEmail, signUpWithEmail, signInWithGoogle } =
+  const { user, loading, signInWithEmail, signUpWithEmail, signInWithGoogle, resetPassword } =
     useAuth();
   const router = useRouter();
 
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "reset">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -63,6 +63,20 @@ export default function LoginPage() {
     }
   }
 
+  async function handleResetSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setSubmitting(true);
+    try {
+      await resetPassword(email);
+      toast.success("Enviamos um link de redefinição para o seu e-mail.");
+      setMode("login");
+    } catch {
+      toast.error("Não foi possível enviar o e-mail de redefinição.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   if (loading || user) {
     return null;
   }
@@ -93,61 +107,98 @@ export default function LoginPage() {
               >
                 {mode === "signup"
                   ? "Crie sua conta para começar"
-                  : "Entre para acessar suas finanças"}
+                  : mode === "reset"
+                    ? "Vamos te enviar um link para redefinir a senha"
+                    : "Entre para acessar suas finanças"}
               </motion.p>
             </AnimatePresence>
           </div>
 
-          <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3">
-            <input
-              type="email"
-              required
-              placeholder="E-mail"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="rounded-2xl border border-border bg-surface px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
-            />
-            <input
-              type="password"
-              required
-              minLength={6}
-              placeholder="Senha"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="rounded-2xl border border-border bg-surface px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
-            />
+          {mode === "reset" ? (
+            <form onSubmit={handleResetSubmit} className="flex flex-col gap-3">
+              <input
+                type="email"
+                required
+                placeholder="E-mail"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="rounded-2xl border border-border bg-surface px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+              />
+              <button
+                type="submit"
+                disabled={submitting}
+                className="mt-1 rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60"
+              >
+                Enviar link de redefinição
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3">
+              <input
+                type="email"
+                required
+                placeholder="E-mail"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="rounded-2xl border border-border bg-surface px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+              />
+              <input
+                type="password"
+                required
+                minLength={6}
+                placeholder="Senha"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="rounded-2xl border border-border bg-surface px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+              />
+              <button
+                type="submit"
+                disabled={submitting}
+                className="mt-1 rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60"
+              >
+                {mode === "signup" ? "Criar conta" : "Entrar"}
+              </button>
+            </form>
+          )}
+
+          {mode === "login" && (
             <button
-              type="submit"
-              disabled={submitting}
-              className="mt-1 rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60"
+              onClick={() => setMode("reset")}
+              className="mt-3 w-full text-center text-xs text-ink-muted hover:underline"
             >
-              {mode === "signup" ? "Criar conta" : "Entrar"}
+              Esqueci minha senha
             </button>
-          </form>
+          )}
 
           <button
-            onClick={() => setMode(mode === "signup" ? "login" : "signup")}
+            onClick={() => setMode(mode === "signup" ? "login" : mode === "reset" ? "login" : "signup")}
             className="mt-3 w-full text-center text-sm text-accent-strong hover:underline"
           >
             {mode === "signup"
               ? "Já tenho conta, quero entrar"
-              : "Ainda não tenho conta, quero criar"}
+              : mode === "reset"
+                ? "Voltar para o login"
+                : "Ainda não tenho conta, quero criar"}
           </button>
 
-          <div className="my-5 flex items-center gap-3 text-xs text-ink-muted">
-            <div className="h-px flex-1 bg-border" />
-            ou
-            <div className="h-px flex-1 bg-border" />
-          </div>
+          {mode !== "reset" && (
+            <>
+              <div className="my-5 flex items-center gap-3 text-xs text-ink-muted">
+                <div className="h-px flex-1 bg-border" />
+                ou
+                <div className="h-px flex-1 bg-border" />
+              </div>
 
-          <button
-            onClick={handleGoogleLogin}
-            disabled={submitting}
-            className="flex w-full items-center justify-center gap-2.5 rounded-2xl border border-border bg-surface px-4 py-3 text-sm font-medium transition-transform active:scale-[0.98] hover:bg-bg disabled:opacity-60"
-          >
-            <FcGoogle size={18} />
-            Continuar com Google
-          </button>
+              <button
+                onClick={handleGoogleLogin}
+                disabled={submitting}
+                className="flex w-full items-center justify-center gap-2.5 rounded-2xl border border-border bg-surface px-4 py-3 text-sm font-medium transition-transform active:scale-[0.98] hover:bg-bg disabled:opacity-60"
+              >
+                <FcGoogle size={18} />
+                Continuar com Google
+              </button>
+            </>
+          )}
         </div>
       </PageFade>
     </main>

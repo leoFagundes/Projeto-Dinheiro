@@ -86,7 +86,6 @@ function TransactionFormFields({
   function changeTipo(next: TransactionType) {
     setTipo(next);
     if (next !== "despesa") {
-      setBancoId("");
       setParcelar(false);
     }
   }
@@ -139,7 +138,7 @@ function TransactionFormFields({
           data,
           recorrente,
           ...(recorrente && recorrenteFim ? { recorrenteFim } : {}),
-          ...(tipo === "despesa" && bancoId ? { bancoId, formaPagamento } : {}),
+          ...(bancoId ? (tipo === "despesa" ? { bancoId, formaPagamento } : { bancoId }) : {}),
         });
         toast.success("Transação atualizada.");
       } else if (podeParcelar && parcelar) {
@@ -158,7 +157,7 @@ function TransactionFormFields({
           data,
           recorrente,
           ...(recorrente && recorrenteFim ? { recorrenteFim } : {}),
-          ...(tipo === "despesa" && bancoId ? { bancoId, formaPagamento } : {}),
+          ...(bancoId ? (tipo === "despesa" ? { bancoId, formaPagamento } : { bancoId }) : {}),
         });
         toast.success("Transação adicionada.");
       }
@@ -270,7 +269,7 @@ function TransactionFormFields({
           </Link>
         )}
 
-        {tipo === "despesa" && banks.length > 0 && (
+        {banks.length > 0 && (
           <select
             value={bancoId}
             onChange={(event) => changeBanco(event.target.value)}

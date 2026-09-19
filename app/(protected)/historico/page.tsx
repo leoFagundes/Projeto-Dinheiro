@@ -7,6 +7,8 @@ import { useTransactions } from "@/lib/use-transactions";
 import { useCategories } from "@/lib/use-categories";
 import { useBanks } from "@/lib/use-banks";
 import { usePockets } from "@/lib/use-pockets";
+import { usePocketMovements } from "@/lib/use-pocket-movements";
+import { useInvestments } from "@/lib/use-investments";
 import { assignCategoryColors, mapCategoryIcons } from "@/lib/categories";
 import { computeMonthTotals } from "@/lib/derived";
 import { currentMonthKey, formatCurrency, monthKeyOfIsoDate } from "@/lib/format";
@@ -22,6 +24,8 @@ export default function HistoricoPage() {
   const { categories } = useCategories();
   const { banks } = useBanks();
   const { pockets } = usePockets();
+  const { movements: pocketMovements } = usePocketMovements();
+  const { investments } = useInvestments();
   const [monthKey, setMonthKey] = useState(currentMonthKey());
   const [busca, setBusca] = useState("");
 
@@ -61,7 +65,9 @@ export default function HistoricoPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold">Histórico</h1>
           <button
-            onClick={() => downloadTransactionsCsv(transactions, banks, pockets)}
+            onClick={() =>
+              downloadTransactionsCsv(transactions, banks, pockets, investments, pocketMovements)
+            }
             className="flex items-center gap-1.5 text-sm text-accent-strong transition-transform active:scale-95 hover:underline"
           >
             <Download size={16} />

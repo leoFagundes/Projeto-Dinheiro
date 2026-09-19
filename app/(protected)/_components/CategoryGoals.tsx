@@ -16,11 +16,13 @@ export function CategoryGoals({
   gastosPorCategoria,
   iconByCategoria,
   onSetGoal,
+  onRemoveGoal,
 }: {
   goals: CategoryGoal[];
   gastosPorCategoria: Map<string, number>;
   iconByCategoria: Map<string, string>;
   onSetGoal: (categoria: string, limiteMensal: number) => Promise<void>;
+  onRemoveGoal: (id: string) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -73,6 +75,7 @@ export function CategoryGoals({
       <GoalsEditor
         open={editing}
         onSetGoal={onSetGoal}
+        onRemoveGoal={onRemoveGoal}
         goals={goals}
         onClose={() => setEditing(false)}
       />
@@ -84,11 +87,13 @@ function GoalsEditor({
   open,
   goals,
   onSetGoal,
+  onRemoveGoal,
   onClose,
 }: {
   open: boolean;
   goals: CategoryGoal[];
   onSetGoal: (categoria: string, limiteMensal: number) => Promise<void>;
+  onRemoveGoal: (id: string) => Promise<void>;
   onClose: () => void;
 }) {
   const { byType } = useCategories();
@@ -108,8 +113,11 @@ function GoalsEditor({
     try {
       for (const categoria of despesaCategorias) {
         const valor = values[categoria.nome];
+        const existing = goals.find((g) => g.categoria === categoria.nome);
         if (valor > 0) {
           await onSetGoal(categoria.nome, valor);
+        } else if (existing) {
+          await onRemoveGoal(existing.id);
         }
       }
       toast.success("Metas atualizadas.");

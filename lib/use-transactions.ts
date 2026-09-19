@@ -168,7 +168,12 @@ export function useTransactions() {
         data: `${thisMonth}-${day}`,
         recorrente: true,
         recorrenteOrigemId: template.id,
-        ...(template.bancoId ? { bancoId: template.bancoId } : {}),
+        ...(template.bancoId
+          ? {
+              bancoId: template.bancoId,
+              ...(template.formaPagamento ? { formaPagamento: template.formaPagamento } : {}),
+            }
+          : {}),
         criadoEm: Date.now(),
       });
     }
