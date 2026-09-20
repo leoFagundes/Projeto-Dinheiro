@@ -13,7 +13,6 @@ import { useInvestments } from "@/lib/use-investments";
 import { useInvestmentMovements } from "@/lib/use-investment-movements";
 import { assignCategoryColors, mapCategoryIcons } from "@/lib/categories";
 import {
-  computeBankBreakdown,
   computeBankSaldoConta,
   computeDespesasVariacao,
   computeMonthlyFlowTrend,
@@ -42,10 +41,14 @@ export default function DashboardPage() {
   const { banks, payFatura, transferBetweenBanks } = useBanks();
   const { payments: bankPayments } = useBankPayments();
   const { transfers: bankTransfers } = useBankTransfers();
-  const { pockets, adjustSaldo, moveFunds, registrarRendimento } = usePockets();
+  const { pockets, adjustSaldo, moveFunds, registrarRendimento, deletePocketMovement } = usePockets();
   const { movements } = usePocketMovements();
-  const { investments, moveInvestment, registrarRendimento: registrarRendimentoInvestimento } =
-    useInvestments();
+  const {
+    investments,
+    moveInvestment,
+    registrarRendimento: registrarRendimentoInvestimento,
+    deleteInvestmentMovement,
+  } = useInvestments();
   const { movements: investmentMovements } = useInvestmentMovements();
 
   if (loading) {
@@ -66,15 +69,16 @@ export default function DashboardPage() {
   const upcomingEvents = computeUpcomingEvents(transactions, 7);
   const { receitas, despesas } = computeMonthTotals(transactions, thisMonth);
   const variacaoDespesas = computeDespesasVariacao(transactions, thisMonth);
-  const bankBreakdown = computeBankBreakdown(transactions, thisMonth, banks);
   const monthlyFlow = computeMonthlyFlowTrend(transactions, 6);
   const colorByCategoria = assignCategoryColors(categories);
   const iconByCategoria = mapCategoryIcons(categories);
   const categoriaNomes = new Set(categories.filter((c) => c.tipo === "despesa").map((c) => c.nome));
   const goalsValidos = goals.filter((g) => categoriaNomes.has(g.categoria));
   const goalOverridesValidos = goalOverrides.filter((o) => categoriaNomes.has(o.categoria));
-  const gastosMesPorBanco = new Map(bankBreakdown.map((item) => [item.bancoId, item.total]));
   const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
+  const visibleBanks = banks.filter((b) => !b.oculto);
+  const visiblePockets = pockets.filter((p) => !p.oculto);
+  const visibleInvestments = investments.filter((inv) => !inv.oculto);
   const saldoContaPorBanco = new Map(
     banks.map((b) => [
       b.id,
@@ -114,8 +118,10 @@ export default function DashboardPage() {
         <section id="bancos" className="scroll-mt-20">
           <h2 className="mb-3 text-sm font-medium text-ink-muted">Bancos</h2>
           <BankDebtSection
-            banks={banks}
-            gastosMesPorBanco={gastosMesPorBanco}
+            banks={visibleBanks}
+            allBanks={banks}
+            transactions={transactions}
+            bankPayments={bankPayments}
             saldoContaPorBanco={saldoContaPorBanco}
             onPayFatura={payFatura}
             onTransfer={transferBetweenBanks}
@@ -141,23 +147,25 @@ export default function DashboardPage() {
         <section id="caixinhas" className="scroll-mt-20">
           <h2 className="mb-3 text-sm font-medium text-ink-muted">Caixinhas</h2>
           <PocketsSection
-            pockets={pockets}
+            pockets={visiblePockets}
             banks={banks}
             movements={movements}
             onAdjust={adjustSaldo}
             onMoveFunds={moveFunds}
             onRegistrarRendimento={registrarRendimento}
+            onDeleteMovement={deletePocketMovement}
           />
         </section>
 
         <section id="investimentos" className="scroll-mt-20">
           <h2 className="mb-3 text-sm font-medium text-ink-muted">Investimentos</h2>
           <InvestmentsSection
-            investments={investments}
+            investments={visibleInvestments}
             movements={investmentMovements}
             banks={banks}
             onMove={moveInvestment}
             onRegistrarRendimento={registrarRendimentoInvestimento}
+            onDeleteMovement={deleteInvestmentMovement}
           />
         </section>
 

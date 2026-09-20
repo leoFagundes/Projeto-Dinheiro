@@ -1,6 +1,6 @@
 import {
-  computeBankBreakdown,
-  computeBankSaldoConta,
+  computeBankFaturaAjustada,
+  computeBankSaldoContaAsOf,
   computeCategoryBreakdown,
   computeMonthTotals,
   computePocketRendimento,
@@ -127,14 +127,14 @@ export function buildMonthlyReportCsv(input: MonthlyReportInput): string {
   }
 
   if (banks.length > 0) {
-    const bankBreakdown = computeBankBreakdown(transactions, monthKey, banks);
     blocks.push(
       toCsvBlock(
-        ["Banco", "Fatura do mês", "Saldo em conta", "Saldo anterior"],
+        ["Banco", "Fatura do mês", "Saldo em conta (fim do mês)", "Saldo anterior"],
         banks.map((b) => {
-          const fatura = bankBreakdown.find((item) => item.bancoId === b.id)?.total ?? 0;
-          const saldoConta = computeBankSaldoConta(
+          const fatura = computeBankFaturaAjustada(b.id, transactions, monthKey, banks, bankPayments);
+          const saldoConta = computeBankSaldoContaAsOf(
             b,
+            monthKey,
             transactions,
             pocketMovements,
             bankPayments,

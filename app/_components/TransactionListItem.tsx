@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Money } from "./Money";
 import { TransactionFormSheet } from "./TransactionFormSheet";
-import { FALLBACK_CATEGORY_COLOR, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
+import { categoryKey, FALLBACK_CATEGORY_COLOR, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { formatDate } from "@/lib/format";
 import type { Transaction } from "@/lib/types";
 
@@ -29,8 +29,9 @@ export function TransactionListItem({
   const [deleting, setDeleting] = useState(false);
   const signedValue =
     transaction.tipo === "receita" ? transaction.valor : -transaction.valor;
-  const categoriaColor = colorByCategoria.get(transaction.categoria) ?? FALLBACK_CATEGORY_COLOR;
-  const categoriaIcon = iconByCategoria.get(transaction.categoria) ?? FALLBACK_CATEGORY_ICON;
+  const categoriaKey = categoryKey(transaction.tipo, transaction.categoria);
+  const categoriaColor = colorByCategoria.get(categoriaKey) ?? FALLBACK_CATEGORY_COLOR;
+  const categoriaIcon = iconByCategoria.get(categoriaKey) ?? FALLBACK_CATEGORY_ICON;
   const bancoNome = transaction.bancoId ? bankNameById.get(transaction.bancoId) : undefined;
 
   async function handleConfirmDelete() {

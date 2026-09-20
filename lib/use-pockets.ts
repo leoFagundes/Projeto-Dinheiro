@@ -17,7 +17,7 @@ import {
 import { db } from "./firebase";
 import { useAuth } from "./auth-context";
 import { todayIsoDate } from "./format";
-import type { Pocket } from "./types";
+import type { Pocket, PocketMovement, PocketTransfer } from "./types";
 
 const COLLECTION = "pockets";
 
@@ -31,10 +31,12 @@ export function usePockets() {
 
     const q = query(collection(db, COLLECTION), where("userId", "==", user.uid));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const items = snapshot.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...(docSnap.data() as Omit<Pocket, "id">),
-      }));
+      const items = snapshot.docs
+        .map((docSnap) => ({
+          id: docSnap.id,
+          ...(docSnap.data() as Omit<Pocket, "id">),
+        }))
+        .sort((a, b) => a.criadoEm - b.criadoEm);
       setPockets(items);
       setLoading(false);
     });
@@ -74,9 +76,18 @@ export function usePockets() {
     await deleteDoc(doc(db, COLLECTION, id));
   }, []);
 
-  /** Move dinheiro de uma caixinha para outra de forma atômica. */
+  const setPocketOculto = useCallback(async (id: string, oculto: boolean) => {
+    await updateDoc(doc(db, COLLECTION, id), oculto ? { oculto: true } : { oculto: deleteField() });
+  }, []);
+
+  /**
+   * Move dinheiro de uma caixinha para outra de forma atômica, registrando a
+   * transferência (sem isso, ela não aparecia em lugar nenhum e não dava pra
+   * desfazer).
+   */
   const transferBetweenPockets = useCallback(
-    async (fromId: string, toId: string, valor: number) => {
+    async (fromId: string, toId: string, valor: number, data: string = todayIsoDate()) => {
+      if (!user) return;
       await runTransaction(db, async (transaction) => {
         const fromRef = doc(db, COLLECTION, fromId);
         const fromSnap = await transaction.get(fromRef);
@@ -86,17 +97,44 @@ export function usePockets() {
         }
         transaction.update(fromRef, { saldo: increment(-valor) });
         transaction.update(doc(db, COLLECTION, toId), { saldo: increment(valor) });
+        transaction.set(doc(collection(db, "pocketTransfers")), {
+          userId: user.uid,
+          fromPocketId: fromId,
+          toPocketId: toId,
+          valor,
+          data,
+          criadoEm: Date.now(),
+        });
       });
     },
-    [],
+    [user],
   );
+
+  /** Desfaz uma transferência entre caixinhas, devolvendo o saldo pra origem. */
+  const deletePocketTransfer = useCallback(async (transfer: PocketTransfer) => {
+    await runTransaction(db, async (transaction) => {
+      transaction.update(doc(db, COLLECTION, transfer.fromPocketId), {
+        saldo: increment(transfer.valor),
+      });
+      transaction.update(doc(db, COLLECTION, transfer.toPocketId), {
+        saldo: increment(-transfer.valor),
+      });
+      transaction.delete(doc(db, "pocketTransfers", transfer.id));
+    });
+  }, []);
 
   /**
    * Deposita ou retira dinheiro de uma caixinha vinculando o movimento a um
    * banco, para que o saldo em conta desse banco reflita a transferência.
    */
   const moveFunds = useCallback(
-    async (pocketId: string, bancoId: string, tipo: "deposito" | "retirada", valor: number) => {
+    async (
+      pocketId: string,
+      bancoId: string,
+      tipo: "deposito" | "retirada",
+      valor: number,
+      data: string = todayIsoDate(),
+    ) => {
       if (!user) return;
       await runTransaction(db, async (transaction) => {
         const pocketRef = doc(db, COLLECTION, pocketId);
@@ -114,7 +152,7 @@ export function usePockets() {
           bancoId,
           tipo,
           valor,
-          data: todayIsoDate(),
+          data,
           criadoEm: Date.now(),
         });
       });
@@ -149,6 +187,15 @@ export function usePockets() {
     [user],
   );
 
+  /** Exclui um movimento (depósito/retirada/rendimento), desfazendo o efeito no saldo da caixinha. */
+  const deletePocketMovement = useCallback(async (movement: PocketMovement) => {
+    const delta = movement.tipo === "retirada" ? movement.valor : -movement.valor;
+    await runTransaction(db, async (transaction) => {
+      transaction.update(doc(db, COLLECTION, movement.pocketId), { saldo: increment(delta) });
+      transaction.delete(doc(db, "pocketMovements", movement.id));
+    });
+  }, []);
+
   return {
     pockets,
     loading,
@@ -156,8 +203,11 @@ export function usePockets() {
     adjustSaldo,
     updatePocket,
     removePocket,
+    setPocketOculto,
     transferBetweenPockets,
+    deletePocketTransfer,
     moveFunds,
     registrarRendimento,
+    deletePocketMovement,
   };
 }

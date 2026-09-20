@@ -14,6 +14,15 @@ export const DEFAULT_CATEGORIES: { nome: string; tipo: TransactionType; icone: s
 export const FALLBACK_CATEGORY_ICON = "🏷️";
 
 /**
+ * Chave usada pra indexar cor/ícone por categoria. Categorias de receita e
+ * despesa não são únicas por nome (ex.: "Outros" existe nos dois tipos por
+ * padrão), então indexar só pelo nome fazia uma roubar a cor/ícone da outra.
+ */
+export function categoryKey(tipo: TransactionType, nome: string): string {
+  return `${tipo}:${nome}`;
+}
+
+/**
  * Paleta categórica com ordem fixa validada para distinção sob daltonismo
  * (ver skill de dataviz). Como categorias agora são definidas pelo usuário,
  * a cor de cada uma é atribuída pela posição em que foi criada — nunca por
@@ -30,27 +39,29 @@ const CATEGORY_PALETTE = [
   "#e34948",
 ];
 
-/** Mapeia nome da categoria -> cor, na ordem em que cada categoria foi criada. */
+/** Mapeia categoria (tipo+nome) -> cor, na ordem em que cada categoria foi criada. */
 export function assignCategoryColors(categories: Category[]): Map<string, string> {
   const ordered = [...categories].sort((a, b) => a.criadoEm - b.criadoEm);
-  const colorByName = new Map<string, string>();
+  const colorByKey = new Map<string, string>();
   let index = 0;
   for (const categoria of ordered) {
-    if (colorByName.has(categoria.nome)) continue;
-    colorByName.set(categoria.nome, CATEGORY_PALETTE[index % CATEGORY_PALETTE.length]);
+    const key = categoryKey(categoria.tipo, categoria.nome);
+    if (colorByKey.has(key)) continue;
+    colorByKey.set(key, CATEGORY_PALETTE[index % CATEGORY_PALETTE.length]);
     index += 1;
   }
-  return colorByName;
+  return colorByKey;
 }
 
 export const FALLBACK_CATEGORY_COLOR = "#94a3b8";
 
-/** Mapeia nome da categoria -> ícone escolhido (ou o ícone padrão, se não houver). */
+/** Mapeia categoria (tipo+nome) -> ícone escolhido (ou o ícone padrão, se não houver). */
 export function mapCategoryIcons(categories: Category[]): Map<string, string> {
-  const iconByName = new Map<string, string>();
+  const iconByKey = new Map<string, string>();
   for (const categoria of categories) {
-    if (iconByName.has(categoria.nome)) continue;
-    iconByName.set(categoria.nome, categoria.icone ?? FALLBACK_CATEGORY_ICON);
+    const key = categoryKey(categoria.tipo, categoria.nome);
+    if (iconByKey.has(key)) continue;
+    iconByKey.set(key, categoria.icone ?? FALLBACK_CATEGORY_ICON);
   }
-  return iconByName;
+  return iconByKey;
 }

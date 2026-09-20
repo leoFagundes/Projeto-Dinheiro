@@ -4,6 +4,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeftRight,
+  Eye,
+  EyeOff,
   Landmark,
   LogOut,
   Pencil,
@@ -24,8 +26,8 @@ import { useBankPayments } from "@/lib/use-bank-payments";
 import { useBankTransfers } from "@/lib/use-bank-transfers";
 import { useInvestments } from "@/lib/use-investments";
 import { useInvestmentMovements } from "@/lib/use-investment-movements";
-import { computeBankSaldoConta } from "@/lib/derived";
-import { formatCurrency } from "@/lib/format";
+import { computeBankFaturaAjustada, computeBankSaldoConta } from "@/lib/derived";
+import { currentMonthKey, formatCurrency, todayIsoDate } from "@/lib/format";
 import { FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { PageFade } from "@/app/_components/PageFade";
 import { ConfirmDialog } from "@/app/_components/ConfirmDialog";
@@ -84,11 +86,19 @@ function CategoriasSection() {
 
   async function handleAdd(event: React.FormEvent) {
     event.preventDefault();
-    if (!nome.trim()) {
+    const nomeNormalizado = nome.trim();
+    if (!nomeNormalizado) {
       toast.error("Dê um nome para a categoria.");
       return;
     }
-    await addCategory(nome.trim(), tipo, icone);
+    const duplicada = categories.some(
+      (c) => c.tipo === tipo && c.nome.toLowerCase() === nomeNormalizado.toLowerCase(),
+    );
+    if (duplicada) {
+      toast.error(`Já existe uma categoria de ${tipo} com esse nome.`);
+      return;
+    }
+    await addCategory(nomeNormalizado, tipo, icone);
     toast.success("Categoria criada.");
     setNome("");
     setIcone(FALLBACK_CATEGORY_ICON);
@@ -96,8 +106,21 @@ function CategoriasSection() {
 
   async function handleUpdateCategory(id: string, input: { nome: string; icone: string }) {
     const original = categories.find((c) => c.id === id);
+    if (!original) return;
+    const duplicada = categories.some(
+      (c) =>
+        c.id !== id &&
+        c.tipo === original.tipo &&
+        c.nome.toLowerCase() === input.nome.trim().toLowerCase(),
+    );
+    if (duplicada) {
+      throw new Error(`Já existe uma categoria de ${original.tipo} com esse nome.`);
+    }
     await updateCategory(id, input);
-    if (original && original.nome !== input.nome) {
+    // Metas de gasto valem só pra despesas, então renomear uma categoria de
+    // receita nunca deve mexer numa meta — mesmo que exista uma despesa com
+    // o mesmo nome (ex.: "Outros" existe nos dois tipos por padrão).
+    if (original.tipo === "despesa" && original.nome !== input.nome) {
       await renameGoalCategoria(original.nome, input.nome);
     }
   }
@@ -295,8 +318,8 @@ function EditCategoryFields({
       await onSave(categoria.id, { nome: nome.trim(), icone });
       toast.success("Categoria atualizada.");
       onClose();
-    } catch {
-      toast.error("Não foi possível atualizar a categoria.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a categoria.");
     } finally {
       setSaving(false);
     }
@@ -340,12 +363,14 @@ function EditCategoryFields({
 }
 
 function BancosSection() {
-  const { banks, addBank, updateBank, removeBank } = useBanks();
+  const { banks, addBank, updateBank, removeBank, setBankOculto, setFaturaAjusteManual } =
+    useBanks();
   const { transactions } = useTransactions();
   const { movements } = usePocketMovements();
   const { payments } = useBankPayments();
   const { movements: investmentMovements } = useInvestmentMovements();
   const { transfers } = useBankTransfers();
+  const thisMonth = currentMonthKey();
   const [nome, setNome] = useState("");
   const [saldoDevedor, setSaldoDevedor] = useState(0);
   const [saldoContaInicial, setSaldoContaInicial] = useState(0);
@@ -409,11 +434,31 @@ function BancosSection() {
               investmentMovements,
               transfers,
             );
+            const faturaAjustada = computeBankFaturaAjustada(
+              b.id,
+              transactions,
+              thisMonth,
+              banks,
+              payments,
+            );
             return (
-              <li key={b.id} className="rounded-xl bg-bg px-3 py-2.5">
+              <li
+                key={b.id}
+                className={`rounded-xl bg-bg px-3 py-2.5 ${b.oculto ? "opacity-50" : ""}`}
+              >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate">{b.nome}</span>
+                  <span className="min-w-0 truncate">
+                    {b.nome}
+                    {b.oculto && <span className="ml-1.5 text-xs text-ink-muted">(oculto)</span>}
+                  </span>
                   <span className="flex shrink-0 items-center gap-2.5">
+                    <button
+                      onClick={() => setBankOculto(b.id, !b.oculto)}
+                      className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
+                      aria-label={b.oculto ? "Mostrar banco" : "Ocultar banco"}
+                    >
+                      {b.oculto ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
                     <button
                       onClick={() => setEditing(b)}
                       className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
@@ -434,6 +479,11 @@ function BancosSection() {
                   <span className={saldoConta < 0 ? "text-negative" : "text-accent-strong"}>
                     saldo em conta: {formatCurrency(saldoConta)}
                   </span>
+                  {faturaAjustada > 0 && (
+                    <span className="text-negative">
+                      fatura do mês: {formatCurrency(faturaAjustada)}
+                    </span>
+                  )}
                   {b.saldoDevedor > 0 && (
                     <span className="text-negative">
                       saldo anterior: {formatCurrency(b.saldoDevedor)}
@@ -444,6 +494,13 @@ function BancosSection() {
             );
           })}
         </ul>
+      )}
+
+      {banks.some((b) => b.oculto) && (
+        <p className="mt-2 text-[11px] text-ink-muted">
+          Ocultar (ícone de olho) só tira o banco da tela inicial — ele continua contando no
+          patrimônio e disponível pra escolher em transações e transferências.
+        </p>
       )}
 
       <ConfirmDialog
@@ -461,7 +518,16 @@ function BancosSection() {
         onCancel={() => setRemoving(null)}
       />
 
-      <EditBankSheet banco={editing} onSave={updateBank} onClose={() => setEditing(null)} />
+      <EditBankSheet
+        banco={editing}
+        onSave={updateBank}
+        onSetFaturaAjusteManual={setFaturaAjusteManual}
+        saldoContaAtual={editing ? computeBankSaldoConta(editing, transactions, movements, payments, investmentMovements, transfers) : 0}
+        faturaAjustadaAtual={
+          editing ? computeBankFaturaAjustada(editing.id, transactions, thisMonth, banks, payments) : 0
+        }
+        onClose={() => setEditing(null)}
+      />
     </SectionCard>
   );
 }
@@ -469,6 +535,9 @@ function BancosSection() {
 function EditBankSheet({
   banco,
   onSave,
+  onSetFaturaAjusteManual,
+  saldoContaAtual,
+  faturaAjustadaAtual,
   onClose,
 }: {
   banco: Bank | null;
@@ -476,12 +545,23 @@ function EditBankSheet({
     id: string,
     input: { nome: string; saldoDevedor: number; saldoContaInicial?: number },
   ) => Promise<void>;
+  onSetFaturaAjusteManual: (bancoId: string, delta: number) => Promise<void>;
+  saldoContaAtual: number;
+  faturaAjustadaAtual: number;
   onClose: () => void;
 }) {
   return (
     <BottomSheet open={banco !== null} onClose={onClose}>
       {banco && (
-        <EditBankFields key={banco.id} banco={banco} onSave={onSave} onClose={onClose} />
+        <EditBankFields
+          key={banco.id}
+          banco={banco}
+          onSave={onSave}
+          onSetFaturaAjusteManual={onSetFaturaAjusteManual}
+          saldoContaAtual={saldoContaAtual}
+          faturaAjustadaAtual={faturaAjustadaAtual}
+          onClose={onClose}
+        />
       )}
     </BottomSheet>
   );
@@ -490,6 +570,9 @@ function EditBankSheet({
 function EditBankFields({
   banco,
   onSave,
+  onSetFaturaAjusteManual,
+  saldoContaAtual,
+  faturaAjustadaAtual,
   onClose,
 }: {
   banco: Bank;
@@ -497,11 +580,15 @@ function EditBankFields({
     id: string,
     input: { nome: string; saldoDevedor: number; saldoContaInicial?: number },
   ) => Promise<void>;
+  onSetFaturaAjusteManual: (bancoId: string, delta: number) => Promise<void>;
+  saldoContaAtual: number;
+  faturaAjustadaAtual: number;
   onClose: () => void;
 }) {
   const [nome, setNome] = useState(banco.nome);
   const [saldoDevedor, setSaldoDevedor] = useState(banco.saldoDevedor);
-  const [saldoContaInicial, setSaldoContaInicial] = useState(banco.saldoContaInicial ?? 0);
+  const [saldoConta, setSaldoConta] = useState(saldoContaAtual);
+  const [faturaMes, setFaturaMes] = useState(faturaAjustadaAtual);
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -511,11 +598,19 @@ function EditBankFields({
     }
     setSaving(true);
     try {
+      const deltaConta = saldoConta - saldoContaAtual;
+      const novoSaldoContaInicial = (banco.saldoContaInicial ?? 0) + deltaConta;
       await onSave(banco.id, {
         nome: nome.trim(),
         saldoDevedor,
-        saldoContaInicial: saldoContaInicial || undefined,
+        saldoContaInicial: novoSaldoContaInicial || undefined,
       });
+
+      const deltaFatura = faturaAjustadaAtual - faturaMes;
+      if (deltaFatura !== 0) {
+        await onSetFaturaAjusteManual(banco.id, deltaFatura);
+      }
+
       toast.success("Banco atualizado.");
       onClose();
     } catch {
@@ -537,10 +632,18 @@ function EditBankFields({
           className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
         />
         <label className="flex flex-col gap-1 text-xs text-ink-muted">
-          Saldo em conta (ajuste manual)
+          Saldo em conta atual
           <CurrencyInput
-            value={saldoContaInicial}
-            onChange={setSaldoContaInicial}
+            value={saldoConta}
+            onChange={setSaldoConta}
+            className="rounded-2xl border border-border px-4 py-3 text-sm text-ink outline-none transition-colors focus:border-accent"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          Fatura deste mês
+          <CurrencyInput
+            value={faturaMes}
+            onChange={setFaturaMes}
             className="rounded-2xl border border-border px-4 py-3 text-sm text-ink outline-none transition-colors focus:border-accent"
           />
         </label>
@@ -552,6 +655,10 @@ function EditBankFields({
             className="rounded-2xl border border-border px-4 py-3 text-sm text-ink outline-none transition-colors focus:border-accent"
           />
         </label>
+        <p className="text-[11px] text-ink-muted">
+          Os três campos acima são o que está de verdade hoje — o site ajusta as contas por trás
+          pra bater com o que você informar, sem duplicar nada já rastreado.
+        </p>
         <button
           onClick={handleSave}
           disabled={saving}
@@ -565,7 +672,7 @@ function EditBankFields({
 }
 
 function CaixinhasSection() {
-  const { pockets, addPocket, updatePocket, removePocket, transferBetweenPockets } =
+  const { pockets, addPocket, updatePocket, removePocket, setPocketOculto, transferBetweenPockets } =
     usePockets();
   const [nome, setNome] = useState("");
   const [saldoInicial, setSaldoInicial] = useState(0);
@@ -626,9 +733,14 @@ function CaixinhasSection() {
             {pockets.map((p) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between rounded-xl bg-bg px-3 py-2.5"
+                className={`flex items-center justify-between rounded-xl bg-bg px-3 py-2.5 ${
+                  p.oculto ? "opacity-50" : ""
+                }`}
               >
-                <span>{p.nome}</span>
+                <span>
+                  {p.nome}
+                  {p.oculto && <span className="ml-1.5 text-xs text-ink-muted">(oculta)</span>}
+                </span>
                 <span className="flex items-center gap-2.5">
                   <span className="text-accent-strong">
                     {formatCurrency(p.saldo)}
@@ -636,6 +748,13 @@ function CaixinhasSection() {
                       <span className="text-ink-muted"> / {formatCurrency(p.metaValor)}</span>
                     ) : null}
                   </span>
+                  <button
+                    onClick={() => setPocketOculto(p.id, !p.oculto)}
+                    className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
+                    aria-label={p.oculto ? "Mostrar caixinha" : "Ocultar caixinha"}
+                  >
+                    {p.oculto ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
                   <button
                     onClick={() => setEditing(p)}
                     className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
@@ -663,6 +782,13 @@ function CaixinhasSection() {
               <ArrowLeftRight size={14} />
               Transferir entre caixinhas
             </button>
+          )}
+
+          {pockets.some((p) => p.oculto) && (
+            <p className="mt-2 text-[11px] text-ink-muted">
+              Ocultar (ícone de olho) só tira a caixinha da tela inicial — ela continua contando
+              no patrimônio e disponível pra escolher em depósitos/retiradas.
+            </p>
           )}
         </>
       )}
@@ -791,12 +917,13 @@ function TransferSheet({
 }: {
   open: boolean;
   pockets: Pocket[];
-  onTransfer: (fromId: string, toId: string, valor: number) => Promise<void>;
+  onTransfer: (fromId: string, toId: string, valor: number, data?: string) => Promise<void>;
   onClose: () => void;
 }) {
   const [fromId, setFromId] = useState(pockets[0]?.id ?? "");
   const [toId, setToId] = useState(pockets[1]?.id ?? "");
   const [valor, setValor] = useState(0);
+  const [data, setData] = useState(todayIsoDate());
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -810,7 +937,7 @@ function TransferSheet({
     }
     setSaving(true);
     try {
-      await onTransfer(fromId, toId, valor);
+      await onTransfer(fromId, toId, valor, data);
       toast.success("Transferência feita.");
       setValor(0);
       onClose();
@@ -852,6 +979,12 @@ function TransferSheet({
           onChange={setValor}
           className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
         />
+        <input
+          type="date"
+          value={data}
+          onChange={(event) => setData(event.target.value)}
+          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        />
         <button
           onClick={handleSave}
           disabled={saving}
@@ -865,7 +998,8 @@ function TransferSheet({
 }
 
 function InvestimentosSection() {
-  const { investments, addInvestment, updateInvestment, removeInvestment } = useInvestments();
+  const { investments, addInvestment, updateInvestment, removeInvestment, setInvestmentOculto } =
+    useInvestments();
   const [nome, setNome] = useState("");
   const [tipo, setTipo] = useState<InvestmentType>("rendaFixa");
   const [removing, setRemoving] = useState<{ id: string; nome: string } | null>(null);
@@ -917,10 +1051,15 @@ function InvestimentosSection() {
           {investments.map((inv) => (
             <li
               key={inv.id}
-              className="flex items-center justify-between gap-2 rounded-xl bg-bg px-3 py-2.5"
+              className={`flex items-center justify-between gap-2 rounded-xl bg-bg px-3 py-2.5 ${
+                inv.oculto ? "opacity-50" : ""
+              }`}
             >
               <span className="min-w-0">
-                <span className="block truncate">{inv.nome}</span>
+                <span className="block truncate">
+                  {inv.nome}
+                  {inv.oculto && <span className="ml-1.5 text-xs text-ink-muted">(oculto)</span>}
+                </span>
                 <span className="text-xs text-ink-muted">
                   {inv.tipo === "rendaVariavel" ? "Renda variável" : "Renda fixa"} ·{" "}
                   {formatCurrency(inv.valorInvestido)}
@@ -930,6 +1069,13 @@ function InvestimentosSection() {
                 </span>
               </span>
               <span className="flex shrink-0 items-center gap-2.5">
+                <button
+                  onClick={() => setInvestmentOculto(inv.id, !inv.oculto)}
+                  className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
+                  aria-label={inv.oculto ? "Mostrar investimento" : "Ocultar investimento"}
+                >
+                  {inv.oculto ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
                 <button
                   onClick={() => setEditing(inv)}
                   className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
@@ -953,6 +1099,12 @@ function InvestimentosSection() {
       <p className="mt-3 text-xs text-ink-muted">
         Aportes e resgates são feitos na aba Início, dentro de cada investimento.
       </p>
+      {investments.some((inv) => inv.oculto) && (
+        <p className="mt-1 text-[11px] text-ink-muted">
+          Ocultar (ícone de olho) só tira o investimento da tela inicial — ele continua contando
+          no patrimônio e disponível pra escolher em aportes/resgates.
+        </p>
+      )}
 
       <ConfirmDialog
         open={removing !== null}

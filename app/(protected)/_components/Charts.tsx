@@ -11,7 +11,7 @@ import {
   Tooltip,
   XAxis,
 } from "recharts";
-import { FALLBACK_CATEGORY_COLOR, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
+import { categoryKey, FALLBACK_CATEGORY_COLOR, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { formatCurrency, formatMonthLabel } from "@/lib/format";
 import { EmptyState } from "@/app/_components/EmptyState";
 import { PieChart as PieChartIcon, TrendingUp } from "lucide-react";
@@ -54,7 +54,7 @@ export function CategoryPieChart({
               {data.map((item) => (
                 <Cell
                   key={item.categoria}
-                  fill={colorByCategoria.get(item.categoria) ?? FALLBACK_CATEGORY_COLOR}
+                  fill={colorByCategoria.get(categoryKey("despesa", item.categoria)) ?? FALLBACK_CATEGORY_COLOR}
                 />
               ))}
             </Pie>
@@ -74,10 +74,12 @@ export function CategoryPieChart({
                 className="size-2.5 rounded-full"
                 style={{
                   backgroundColor:
-                    colorByCategoria.get(item.categoria) ?? FALLBACK_CATEGORY_COLOR,
+                    colorByCategoria.get(categoryKey("despesa", item.categoria)) ?? FALLBACK_CATEGORY_COLOR,
                 }}
               />
-              <span>{iconByCategoria.get(item.categoria) ?? FALLBACK_CATEGORY_ICON}</span>
+              <span>
+                {iconByCategoria.get(categoryKey("despesa", item.categoria)) ?? FALLBACK_CATEGORY_ICON}
+              </span>
               {item.categoria}
             </span>
             <span className="flex items-center gap-2">

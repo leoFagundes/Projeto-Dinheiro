@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { useCategories } from "@/lib/use-categories";
 import { computeCategoryBreakdown } from "@/lib/derived";
 import { currentMonthKey, formatCurrency, formatMonthLabel } from "@/lib/format";
-import { FALLBACK_CATEGORY_ICON } from "@/lib/categories";
+import { categoryKey, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { EmptyState } from "@/app/_components/EmptyState";
 import { BottomSheet } from "@/app/_components/BottomSheet";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
@@ -71,7 +71,7 @@ export function CategoryGoals({
                 <div className="flex items-center justify-between gap-2 text-sm">
                   <span className="flex min-w-0 items-center gap-1.5 font-medium">
                     <span className="shrink-0">
-                      {iconByCategoria.get(goal.categoria) ?? FALLBACK_CATEGORY_ICON}
+                      {iconByCategoria.get(categoryKey("despesa", goal.categoria)) ?? FALLBACK_CATEGORY_ICON}
                     </span>
                     <span className="truncate">{goal.categoria}</span>
                   </span>

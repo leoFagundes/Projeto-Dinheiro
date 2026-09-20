@@ -2,6 +2,7 @@ import {
   addMonthsToKey,
   clampDayToMonth,
   currentMonthKey,
+  formatCurrency,
   monthKeyOfIsoDate,
   todayIsoDate,
 } from "./format";
@@ -9,10 +10,12 @@ import type {
   Bank,
   BankPayment,
   BankTransfer,
+  FormaPagamento,
   Investment,
   InvestmentMovement,
   Pocket,
   PocketMovement,
+  PocketTransfer,
   Transaction,
 } from "./types";
 
@@ -95,6 +98,28 @@ export function computeBankBreakdown(
 }
 
 /**
+ * Fatura "ajustada" de um banco no mês: o que foi calculado a partir das
+ * despesas no crédito, menos o que já foi pago (ou corrigido manualmente)
+ * pra esse mês. Pagar a fatura ou editar o ajuste manual em Configurações
+ * mexem aqui — sem isso, o valor exibido nunca refletia um pagamento feito.
+ */
+export function computeBankFaturaAjustada(
+  bancoId: string,
+  transactions: Transaction[],
+  monthKey: string,
+  banks: Bank[],
+  payments: BankPayment[],
+): number {
+  const raw =
+    computeBankBreakdown(transactions, monthKey, banks).find((item) => item.bancoId === bancoId)
+      ?.total ?? 0;
+  const aplicado = payments
+    .filter((p) => p.bancoId === bancoId && monthKeyOfIsoDate(p.data) === monthKey)
+    .reduce((sum, p) => sum + (p.aplicadoFatura ?? 0), 0);
+  return Math.max(0, raw - aplicado);
+}
+
+/**
  * Saldo em conta de um banco: base ajustada manualmente + receitas recebidas
  * nele + retiradas de caixinhas/resgates de investimento de volta pra conta +
  * transferências recebidas de outro banco, menos despesas no débito (saem da
@@ -136,6 +161,31 @@ export function computeBankSaldoConta(
 }
 
 /**
+ * Saldo em conta de um banco no fim de um mês específico (não hoje) — usado
+ * no relatório CSV pra não misturar o saldo atual com a fatura de um mês
+ * antigo, o que faria parecer que aquele era o saldo de época.
+ */
+export function computeBankSaldoContaAsOf(
+  bank: Bank,
+  asOfMonthKey: string,
+  transactions: Transaction[],
+  movements: PocketMovement[],
+  payments: BankPayment[] = [],
+  investmentMovements: InvestmentMovement[] = [],
+  transfers: BankTransfer[] = [],
+): number {
+  const upTo = (data: string) => monthKeyOfIsoDate(data) <= asOfMonthKey;
+  return computeBankSaldoConta(
+    bank,
+    transactions.filter((t) => upTo(t.data)),
+    movements.filter((m) => upTo(m.data)),
+    payments.filter((p) => upTo(p.data)),
+    investmentMovements.filter((m) => upTo(m.data)),
+    transfers.filter((tr) => upTo(tr.data)),
+  );
+}
+
+/**
  * Patrimônio líquido "de verdade": o que está em conta nos bancos + guardado
  * em caixinhas + aportado em investimentos (custo, não cotação de mercado),
  * menos as dívidas de cartão (saldo anterior + fatura do mês corrente).
@@ -166,8 +216,8 @@ export function computePatrimonio(
   const caixinhas = pockets.reduce((sum, p) => sum + p.saldo, 0);
   const investimentos = investments.reduce((sum, i) => sum + (i.saldoAtual ?? i.valorInvestido), 0);
   const thisMonth = currentMonthKey();
-  const faturaMes = computeBankBreakdown(transactions, thisMonth, banks).reduce(
-    (sum, item) => sum + item.total,
+  const faturaMes = banks.reduce(
+    (sum, b) => sum + computeBankFaturaAjustada(b.id, transactions, thisMonth, banks, bankPayments),
     0,
   );
   const saldoAnteriorTotal = banks.reduce((sum, b) => sum + b.saldoDevedor, 0);
@@ -274,4 +324,192 @@ export function computeMonthlyFlowTrend(
   for (let i = months - 1; i >= 0; i--) keys.push(addMonthsToKey(currentKey, -i));
 
   return keys.map((monthKey) => ({ monthKey, ...computeMonthTotals(transactions, monthKey) }));
+}
+
+export type HistoryEntryTipo =
+  | "receita"
+  | "despesa"
+  | "transferencia"
+  | "transferencia_caixinha"
+  | "pagamento_fatura"
+  | "ajuste_fatura"
+  | "caixinha"
+  | "investimento";
+
+/**
+ * Item unificado do Histórico: junta transações com todas as outras
+ * movimentações que hoje ficam em coleções separadas (transferência entre
+ * bancos, pagamento/ajuste de fatura, caixinha, investimento) — sem isso,
+ * essas ações nunca apareciam em lugar nenhum pro usuário revisar.
+ */
+export type HistoryEntry = {
+  id: string;
+  data: string;
+  criadoEm: number;
+  tipo: HistoryEntryTipo;
+  titulo: string;
+  detalhe?: string;
+  valor: number;
+  /** Direção pra exibição: soma ou subtrai visualmente (não é sinal contábil). */
+  direcao: "positivo" | "negativo" | "neutro";
+  categoria?: string;
+  formaPagamento?: FormaPagamento;
+  /** Presente só quando `tipo` é "receita"/"despesa" — permite editar/excluir. */
+  transaction?: Transaction;
+  /**
+   * Presente quando o item pode ser excluído (desfazendo exatamente o que
+   * alterou nos saldos envolvidos) — sem isso, um lançamento errado de
+   * transferência/pagamento/movimento nunca podia ser corrigido.
+   */
+  onDelete?: () => Promise<void>;
+};
+
+export function computeUnifiedHistory(params: {
+  transactions: Transaction[];
+  banks: Bank[];
+  pockets: Pocket[];
+  investments: Investment[];
+  bankTransfers: BankTransfer[];
+  bankPayments: BankPayment[];
+  pocketMovements: PocketMovement[];
+  investmentMovements: InvestmentMovement[];
+  pocketTransfers?: PocketTransfer[];
+  onDeleteBankTransfer?: (transfer: BankTransfer) => Promise<void>;
+  onDeleteBankPayment?: (payment: BankPayment) => Promise<void>;
+  onDeletePocketMovement?: (movement: PocketMovement) => Promise<void>;
+  onDeleteInvestmentMovement?: (movement: InvestmentMovement) => Promise<void>;
+  onDeletePocketTransfer?: (transfer: PocketTransfer) => Promise<void>;
+}): HistoryEntry[] {
+  const {
+    transactions,
+    banks,
+    pockets,
+    investments,
+    bankTransfers,
+    bankPayments,
+    pocketMovements,
+    investmentMovements,
+    pocketTransfers = [],
+    onDeleteBankTransfer,
+    onDeleteBankPayment,
+    onDeletePocketMovement,
+    onDeleteInvestmentMovement,
+    onDeletePocketTransfer,
+  } = params;
+
+  const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
+  const pocketNameById = new Map(pockets.map((p) => [p.id, p.nome]));
+  const investmentNameById = new Map(investments.map((i) => [i.id, i.nome]));
+
+  const entries: HistoryEntry[] = [];
+
+  for (const t of transactions) {
+    entries.push({
+      id: `t-${t.id}`,
+      data: t.data,
+      criadoEm: t.criadoEm,
+      tipo: t.tipo,
+      titulo: t.descricao,
+      detalhe: t.bancoId ? bankNameById.get(t.bancoId) : undefined,
+      valor: t.valor,
+      direcao: t.tipo === "receita" ? "positivo" : "negativo",
+      categoria: t.categoria,
+      formaPagamento: t.formaPagamento,
+      transaction: t,
+    });
+  }
+
+  for (const tr of bankTransfers) {
+    const de = bankNameById.get(tr.fromBancoId) ?? "banco removido";
+    const para = bankNameById.get(tr.toBancoId) ?? "banco removido";
+    entries.push({
+      id: `bt-${tr.id}`,
+      data: tr.data,
+      criadoEm: tr.criadoEm,
+      tipo: "transferencia",
+      titulo: `Transferência: ${de} → ${para}`,
+      valor: tr.valor,
+      direcao: "neutro",
+      onDelete: onDeleteBankTransfer ? () => onDeleteBankTransfer(tr) : undefined,
+    });
+  }
+
+  for (const tr of pocketTransfers) {
+    const de = pocketNameById.get(tr.fromPocketId) ?? "caixinha removida";
+    const para = pocketNameById.get(tr.toPocketId) ?? "caixinha removida";
+    entries.push({
+      id: `pt-${tr.id}`,
+      data: tr.data,
+      criadoEm: tr.criadoEm,
+      tipo: "transferencia_caixinha",
+      titulo: `Transferência entre caixinhas: ${de} → ${para}`,
+      valor: tr.valor,
+      direcao: "neutro",
+      onDelete: onDeletePocketTransfer ? () => onDeletePocketTransfer(tr) : undefined,
+    });
+  }
+
+  for (const p of bankPayments) {
+    const banco = bankNameById.get(p.bancoId) ?? "banco removido";
+    const ehAjuste = p.tipo === "ajuste";
+    entries.push({
+      id: `bp-${p.id}`,
+      data: p.data,
+      criadoEm: p.criadoEm,
+      tipo: ehAjuste ? "ajuste_fatura" : "pagamento_fatura",
+      titulo: ehAjuste ? `Ajuste de fatura — ${banco}` : `Pagamento de fatura — ${banco}`,
+      detalhe: ehAjuste
+        ? `${(p.aplicadoFatura ?? 0) >= 0 ? "reduziu" : "aumentou"} a fatura em ${formatCurrency(Math.abs(p.aplicadoFatura ?? 0))}`
+        : undefined,
+      valor: ehAjuste ? Math.abs(p.aplicadoFatura ?? 0) : p.valor,
+      direcao: "negativo",
+      onDelete: onDeleteBankPayment ? () => onDeleteBankPayment(p) : undefined,
+    });
+  }
+
+  for (const m of pocketMovements) {
+    const caixinha = pocketNameById.get(m.pocketId) ?? "caixinha removida";
+    const bancoDetalhe = m.bancoId ? bankNameById.get(m.bancoId) : undefined;
+    entries.push({
+      id: `pm-${m.id}`,
+      data: m.data,
+      criadoEm: m.criadoEm,
+      tipo: "caixinha",
+      titulo:
+        m.tipo === "deposito"
+          ? `Caixinha ${caixinha} — depósito`
+          : m.tipo === "retirada"
+            ? `Caixinha ${caixinha} — retirada`
+            : `Caixinha ${caixinha} — rendimento`,
+      detalhe: bancoDetalhe,
+      valor: Math.abs(m.valor),
+      direcao:
+        m.tipo === "retirada" || (m.tipo === "rendimento" && m.valor < 0) ? "positivo" : "negativo",
+      onDelete: onDeletePocketMovement ? () => onDeletePocketMovement(m) : undefined,
+    });
+  }
+
+  for (const m of investmentMovements) {
+    const investimento = investmentNameById.get(m.investimentoId) ?? "investimento removido";
+    const bancoDetalhe = m.bancoId ? bankNameById.get(m.bancoId) : undefined;
+    entries.push({
+      id: `im-${m.id}`,
+      data: m.data,
+      criadoEm: m.criadoEm,
+      tipo: "investimento",
+      titulo:
+        m.tipo === "aporte"
+          ? `Investimento ${investimento} — aporte`
+          : m.tipo === "resgate"
+            ? `Investimento ${investimento} — resgate`
+            : `Investimento ${investimento} — rendimento`,
+      detalhe: [bancoDetalhe, m.cotas ? `${m.cotas} cotas` : null].filter(Boolean).join(" · ") || undefined,
+      valor: Math.abs(m.valor),
+      direcao:
+        m.tipo === "resgate" || (m.tipo === "rendimento" && m.valor < 0) ? "positivo" : "negativo",
+      onDelete: onDeleteInvestmentMovement ? () => onDeleteInvestmentMovement(m) : undefined,
+    });
+  }
+
+  return entries.sort((a, b) => (a.data < b.data ? 1 : a.data > b.data ? -1 : b.criadoEm - a.criadoEm));
 }

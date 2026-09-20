@@ -7,9 +7,12 @@ import { useEffect, useRef } from "react";
  * (importante no PWA instalado, onde o gesto/botão de voltar do Android é o
  * caminho natural para fechar algo em vez de sair do app).
  */
+let dismissableSeq = 0;
+
 export function useDismissable(open: boolean, onClose: () => void) {
   const pushedRef = useRef(false);
   const onCloseRef = useRef(onClose);
+  const idRef = useRef<number | null>(null);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -22,12 +25,19 @@ export function useDismissable(open: boolean, onClose: () => void) {
       if (event.key === "Escape") onCloseRef.current();
     }
 
+    // Sheets aninhados (ex: emoji picker dentro de um form de edição) empilham
+    // vários pushState — sem checar se o estado atual ainda é o nosso, o
+    // popstate disparado pelo fechamento de UM deles fecharia todos os outros
+    // que também estão escutando.
     function handlePopState() {
+      if (window.history.state?.dismissableId === idRef.current) return;
       pushedRef.current = false;
       onCloseRef.current();
     }
 
-    window.history.pushState({ dismissable: true }, "");
+    const id = ++dismissableSeq;
+    idRef.current = id;
+    window.history.pushState({ dismissable: true, dismissableId: id }, "");
     pushedRef.current = true;
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("popstate", handlePopState);

@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { PiggyBank, Plus } from "lucide-react";
+import { PiggyBank, Plus, Trash2 } from "lucide-react";
 import { EmptyState } from "@/app/_components/EmptyState";
 import { BottomSheet } from "@/app/_components/BottomSheet";
+import { ConfirmDialog } from "@/app/_components/ConfirmDialog";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, todayIsoDate } from "@/lib/format";
 import { computePocketRendimento } from "@/lib/derived";
 import type { Bank, Pocket, PocketMovement } from "@/lib/types";
 
@@ -18,6 +19,7 @@ export function PocketsSection({
   onAdjust,
   onMoveFunds,
   onRegistrarRendimento,
+  onDeleteMovement,
 }: {
   pockets: Pocket[];
   banks: Bank[];
@@ -28,8 +30,10 @@ export function PocketsSection({
     bancoId: string,
     tipo: "deposito" | "retirada",
     valor: number,
+    data?: string,
   ) => Promise<void>;
   onRegistrarRendimento: (pocketId: string, novoSaldo: number) => Promise<void>;
+  onDeleteMovement: (movement: PocketMovement) => Promise<void>;
 }) {
   const [adjusting, setAdjusting] = useState<Pocket | null>(null);
 
@@ -107,6 +111,7 @@ export function PocketsSection({
         onAdjust={onAdjust}
         onMoveFunds={onMoveFunds}
         onRegistrarRendimento={onRegistrarRendimento}
+        onDeleteMovement={onDeleteMovement}
         onClose={() => setAdjusting(null)}
       />
     </div>
@@ -120,6 +125,7 @@ function AdjustPocketSheet({
   onAdjust,
   onMoveFunds,
   onRegistrarRendimento,
+  onDeleteMovement,
   onClose,
 }: {
   pocket: Pocket | null;
@@ -131,8 +137,10 @@ function AdjustPocketSheet({
     bancoId: string,
     tipo: "deposito" | "retirada",
     valor: number,
+    data?: string,
   ) => Promise<void>;
   onRegistrarRendimento: (pocketId: string, novoSaldo: number) => Promise<void>;
+  onDeleteMovement: (movement: PocketMovement) => Promise<void>;
   onClose: () => void;
 }) {
   return (
@@ -146,6 +154,7 @@ function AdjustPocketSheet({
           onAdjust={onAdjust}
           onMoveFunds={onMoveFunds}
           onRegistrarRendimento={onRegistrarRendimento}
+          onDeleteMovement={onDeleteMovement}
           onClose={onClose}
         />
       )}
@@ -160,6 +169,7 @@ function AdjustPocketFields({
   onAdjust,
   onMoveFunds,
   onRegistrarRendimento,
+  onDeleteMovement,
   onClose,
 }: {
   pocket: Pocket;
@@ -171,8 +181,10 @@ function AdjustPocketFields({
     bancoId: string,
     tipo: "deposito" | "retirada",
     valor: number,
+    data?: string,
   ) => Promise<void>;
   onRegistrarRendimento: (pocketId: string, novoSaldo: number) => Promise<void>;
+  onDeleteMovement: (movement: PocketMovement) => Promise<void>;
   onClose: () => void;
 }) {
   const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
@@ -180,8 +192,10 @@ function AdjustPocketFields({
   const [modo, setModo] = useState<"adicionar" | "retirar" | "rendimento">("adicionar");
   const [bancoId, setBancoId] = useState("");
   const [valor, setValor] = useState(0);
+  const [data, setData] = useState(todayIsoDate());
   const [saldoInformado, setSaldoInformado] = useState(pocket.saldo);
   const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState<PocketMovement | null>(null);
 
   async function handleSave() {
     if (modo === "rendimento") {
@@ -214,7 +228,13 @@ function AdjustPocketFields({
     setSaving(true);
     try {
       if (bancoId) {
-        await onMoveFunds(pocket.id, bancoId, modo === "adicionar" ? "deposito" : "retirada", valor);
+        await onMoveFunds(
+          pocket.id,
+          bancoId,
+          modo === "adicionar" ? "deposito" : "retirada",
+          valor,
+          data,
+        );
       } else {
         await onAdjust(pocket.id, modo === "adicionar" ? valor : -valor);
       }
@@ -226,6 +246,18 @@ function AdjustPocketFields({
       toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a caixinha.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeleteMovement() {
+    if (!removing) return;
+    try {
+      await onDeleteMovement(removing);
+      toast.success("Movimento excluído.");
+    } catch {
+      toast.error("Não foi possível excluir o movimento.");
+    } finally {
+      setRemoving(null);
     }
   }
 
@@ -313,6 +345,15 @@ function AdjustPocketFields({
               ))}
             </select>
           )}
+
+          {bancoId && (
+            <input
+              type="date"
+              value={data}
+              onChange={(event) => setData(event.target.value)}
+              className="mt-2 w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+            />
+          )}
         </>
       )}
 
@@ -349,9 +390,18 @@ function AdjustPocketFields({
                       ? ` · ${bankNameById.get(movimento.bancoId)}`
                       : ""}
                   </span>
-                  <span className={isNegative ? "text-negative" : "text-accent-strong"}>
-                    {movimento.tipo === "rendimento" && movimento.valor >= 0 ? "+" : ""}
-                    {formatCurrency(movimento.valor)}
+                  <span className="flex items-center gap-2">
+                    <span className={isNegative ? "text-negative" : "text-accent-strong"}>
+                      {movimento.tipo === "rendimento" && movimento.valor >= 0 ? "+" : ""}
+                      {formatCurrency(movimento.valor)}
+                    </span>
+                    <button
+                      onClick={() => setRemoving(movimento)}
+                      aria-label="Excluir movimento"
+                      className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </span>
                 </li>
               );
@@ -359,6 +409,16 @@ function AdjustPocketFields({
           </ul>
         </div>
       )}
+
+      <ConfirmDialog
+        open={removing !== null}
+        title="Excluir movimento?"
+        description="Desfaz exatamente o que esse movimento alterou no saldo da caixinha."
+        confirmLabel="Excluir"
+        danger
+        onConfirm={handleDeleteMovement}
+        onCancel={() => setRemoving(null)}
+      />
     </>
   );
 }

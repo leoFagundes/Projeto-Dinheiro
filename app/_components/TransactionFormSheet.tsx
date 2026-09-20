@@ -137,8 +137,9 @@ function TransactionFormFields({
           descricao: descricao.trim(),
           data,
           recorrente,
-          ...(recorrente && recorrenteFim ? { recorrenteFim } : {}),
-          ...(bancoId ? (tipo === "despesa" ? { bancoId, formaPagamento } : { bancoId }) : {}),
+          recorrenteFim: recorrente ? recorrenteFim : "",
+          bancoId,
+          formaPagamento: tipo === "despesa" ? formaPagamento : "",
         });
         toast.success("Transação atualizada.");
       } else if (podeParcelar && parcelar) {

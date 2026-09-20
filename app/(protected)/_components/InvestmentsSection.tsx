@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { Plus, TrendingUp } from "lucide-react";
+import { Plus, Trash2, TrendingUp } from "lucide-react";
 import { EmptyState } from "@/app/_components/EmptyState";
 import { BottomSheet } from "@/app/_components/BottomSheet";
+import { ConfirmDialog } from "@/app/_components/ConfirmDialog";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, todayIsoDate } from "@/lib/format";
 import type { Bank, Investment, InvestmentMovement } from "@/lib/types";
 
 export function InvestmentsSection({
@@ -16,6 +17,7 @@ export function InvestmentsSection({
   banks,
   onMove,
   onRegistrarRendimento,
+  onDeleteMovement,
 }: {
   investments: Investment[];
   movements: InvestmentMovement[];
@@ -26,8 +28,10 @@ export function InvestmentsSection({
     valor: number,
     cotas?: number,
     bancoId?: string,
+    data?: string,
   ) => Promise<void>;
   onRegistrarRendimento: (investimentoId: string, novoSaldoAtual: number) => Promise<void>;
+  onDeleteMovement: (movement: InvestmentMovement) => Promise<void>;
 }) {
   const [selected, setSelected] = useState<Investment | null>(null);
 
@@ -95,6 +99,7 @@ export function InvestmentsSection({
         banks={banks}
         onMove={onMove}
         onRegistrarRendimento={onRegistrarRendimento}
+        onDeleteMovement={onDeleteMovement}
         onClose={() => setSelected(null)}
       />
     </div>
@@ -107,6 +112,7 @@ function MoveInvestmentSheet({
   banks,
   onMove,
   onRegistrarRendimento,
+  onDeleteMovement,
   onClose,
 }: {
   investment: Investment | null;
@@ -118,8 +124,10 @@ function MoveInvestmentSheet({
     valor: number,
     cotas?: number,
     bancoId?: string,
+    data?: string,
   ) => Promise<void>;
   onRegistrarRendimento: (investimentoId: string, novoSaldoAtual: number) => Promise<void>;
+  onDeleteMovement: (movement: InvestmentMovement) => Promise<void>;
   onClose: () => void;
 }) {
   return (
@@ -132,6 +140,7 @@ function MoveInvestmentSheet({
           banks={banks}
           onMove={onMove}
           onRegistrarRendimento={onRegistrarRendimento}
+          onDeleteMovement={onDeleteMovement}
           onClose={onClose}
         />
       )}
@@ -145,6 +154,7 @@ function MoveInvestmentFields({
   banks,
   onMove,
   onRegistrarRendimento,
+  onDeleteMovement,
   onClose,
 }: {
   investment: Investment;
@@ -156,8 +166,10 @@ function MoveInvestmentFields({
     valor: number,
     cotas?: number,
     bancoId?: string,
+    data?: string,
   ) => Promise<void>;
   onRegistrarRendimento: (investimentoId: string, novoSaldoAtual: number) => Promise<void>;
+  onDeleteMovement: (movement: InvestmentMovement) => Promise<void>;
   onClose: () => void;
 }) {
   const isVariavel = investment.tipo === "rendaVariavel";
@@ -168,8 +180,10 @@ function MoveInvestmentFields({
   const [valor, setValor] = useState(0);
   const [cotas, setCotas] = useState("");
   const [bancoId, setBancoId] = useState("");
+  const [data, setData] = useState(todayIsoDate());
   const [saldoInformado, setSaldoInformado] = useState(valorAtual);
   const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState<InvestmentMovement | null>(null);
 
   async function handleSave() {
     if (modo === "rendimento") {
@@ -194,15 +208,15 @@ function MoveInvestmentFields({
       toast.error("Informe um valor válido.");
       return;
     }
-    if (modo === "resgate" && valor > investment.valorInvestido) {
-      toast.error("Valor maior que o total investido.");
+    if (modo === "resgate" && valor > valorAtual) {
+      toast.error("Valor maior que o saldo atual do investimento.");
       return;
     }
 
     setSaving(true);
     try {
       const cotasNum = isVariavel && cotas ? Number(cotas) : undefined;
-      await onMove(investment.id, modo, valor, cotasNum, bancoId || undefined);
+      await onMove(investment.id, modo, valor, cotasNum, bancoId || undefined, data);
       toast.success(modo === "aporte" ? "Aporte registrado." : "Resgate registrado.");
       setValor(0);
       setCotas("");
@@ -212,6 +226,18 @@ function MoveInvestmentFields({
       toast.error(error instanceof Error ? error.message : "Não foi possível registrar.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeleteMovement() {
+    if (!removing) return;
+    try {
+      await onDeleteMovement(removing);
+      toast.success("Movimento excluído.");
+    } catch {
+      toast.error("Não foi possível excluir o movimento.");
+    } finally {
+      setRemoving(null);
     }
   }
 
@@ -318,6 +344,13 @@ function MoveInvestmentFields({
               ))}
             </select>
           )}
+
+          <input
+            type="date"
+            value={data}
+            onChange={(event) => setData(event.target.value)}
+            className="mt-2 w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          />
         </>
       )}
 
@@ -355,9 +388,18 @@ function MoveInvestmentFields({
                       ? ` · ${bankNameById.get(movimento.bancoId)}`
                       : ""}
                   </span>
-                  <span className={isNegative ? "text-negative" : "text-accent-strong"}>
-                    {movimento.tipo === "rendimento" && movimento.valor >= 0 ? "+" : ""}
-                    {formatCurrency(movimento.valor)}
+                  <span className="flex items-center gap-2">
+                    <span className={isNegative ? "text-negative" : "text-accent-strong"}>
+                      {movimento.tipo === "rendimento" && movimento.valor >= 0 ? "+" : ""}
+                      {formatCurrency(movimento.valor)}
+                    </span>
+                    <button
+                      onClick={() => setRemoving(movimento)}
+                      aria-label="Excluir movimento"
+                      className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </span>
                 </li>
               );
@@ -365,6 +407,16 @@ function MoveInvestmentFields({
           </ul>
         </div>
       )}
+
+      <ConfirmDialog
+        open={removing !== null}
+        title="Excluir movimento?"
+        description="Desfaz exatamente o que esse movimento alterou no investimento (e no banco vinculado, se houver)."
+        confirmLabel="Excluir"
+        danger
+        onConfirm={handleDeleteMovement}
+        onCancel={() => setRemoving(null)}
+      />
     </>
   );
 }

@@ -5,6 +5,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   onSnapshot,
   query,
@@ -13,7 +14,21 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./auth-context";
-import type { NewTransaction, Transaction } from "./types";
+import type { FormaPagamento, NewTransaction, Transaction } from "./types";
+
+/**
+ * Igual a Partial<NewTransaction>, exceto pelos três campos opcionais que
+ * precisam de um jeito explícito de dizer "limpa esse campo" — passar
+ * string vazia (ou "" tipada) remove o campo no Firestore em vez de deixar
+ * o valor antigo esquecido lá (updateDoc faz merge, não substitui).
+ */
+type TransactionUpdateInput = Partial<
+  Omit<NewTransaction, "bancoId" | "formaPagamento" | "recorrenteFim">
+> & {
+  bancoId?: string;
+  formaPagamento?: FormaPagamento | "";
+  recorrenteFim?: string;
+};
 import {
   addMonthsToKey,
   clampDayToMonth,
@@ -112,12 +127,18 @@ export function useTransactions() {
     [user],
   );
 
-  const updateTransaction = useCallback(
-    async (id: string, input: Partial<NewTransaction>) => {
-      await updateDoc(doc(db, COLLECTION, id), input);
-    },
-    [],
-  );
+  const updateTransaction = useCallback(async (id: string, input: TransactionUpdateInput) => {
+    const { bancoId, formaPagamento, recorrenteFim, ...rest } = input;
+    const payload: Record<string, unknown> = { ...rest };
+    if (bancoId !== undefined) payload.bancoId = bancoId ? bancoId : deleteField();
+    if (formaPagamento !== undefined) {
+      payload.formaPagamento = formaPagamento ? formaPagamento : deleteField();
+    }
+    if (recorrenteFim !== undefined) {
+      payload.recorrenteFim = recorrenteFim ? recorrenteFim : deleteField();
+    }
+    await updateDoc(doc(db, COLLECTION, id), payload);
+  }, []);
 
   const deleteTransaction = useCallback(async (id: string) => {
     await deleteDoc(doc(db, COLLECTION, id));

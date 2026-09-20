@@ -3,46 +3,70 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { ArrowLeftRight, Landmark, Receipt } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, Landmark, Receipt } from "lucide-react";
 import { EmptyState } from "@/app/_components/EmptyState";
 import { BottomSheet } from "@/app/_components/BottomSheet";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
-import { formatCurrency } from "@/lib/format";
-import type { Bank } from "@/lib/types";
+import { MonthFilter } from "@/app/_components/MonthFilter";
+import { computeBankFaturaAjustada } from "@/lib/derived";
+import { addMonthsToKey, currentMonthKey, formatCurrency, todayIsoDate } from "@/lib/format";
+import type { Bank, BankPayment, Transaction } from "@/lib/types";
 
 export function BankDebtSection({
   banks,
-  gastosMesPorBanco,
+  allBanks,
+  transactions,
+  bankPayments,
   saldoContaPorBanco,
   onPayFatura,
   onTransfer,
 }: {
+  /** Bancos visíveis (não ocultos) — só esses aparecem na lista. */
   banks: Bank[];
-  gastosMesPorBanco: Map<string, number>;
+  /** Todos os bancos, incluindo ocultos — necessário pra resolver nomes no cálculo de fatura. */
+  allBanks: Bank[];
+  transactions: Transaction[];
+  bankPayments: BankPayment[];
   saldoContaPorBanco: Map<string, number>;
-  onPayFatura: (id: string, valor: number) => Promise<void>;
-  onTransfer: (fromBancoId: string, toBancoId: string, valor: number) => Promise<void>;
+  onPayFatura: (id: string, valor: number, data?: string) => Promise<void>;
+  onTransfer: (fromBancoId: string, toBancoId: string, valor: number, data?: string) => Promise<void>;
 }) {
   const [paying, setPaying] = useState<Bank | null>(null);
   const [transferring, setTransferring] = useState(false);
+  const [monthKey, setMonthKey] = useState(currentMonthKey());
+  const mesAtual = monthKey === currentMonthKey();
+  const mesAnterior = addMonthsToKey(currentMonthKey(), -1);
 
   if (banks.length === 0) {
     return (
-      <EmptyState
-        icon={Landmark}
-        title="Nenhum banco cadastrado"
-        description="Cadastre um banco em Configurações para acompanhar sua fatura."
-      />
+      <div className="flex flex-col gap-3">
+        <MonthFilter monthKey={monthKey} onChange={setMonthKey} />
+        <EmptyState
+          icon={Landmark}
+          title="Nenhum banco visível"
+          description="Cadastre ou reexiba um banco em Configurações para acompanhar sua fatura."
+        />
+      </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-3">
+      <MonthFilter monthKey={monthKey} onChange={setMonthKey} />
       <ul className="flex flex-col gap-2">
         {banks.map((banco) => {
-          const fatura = gastosMesPorBanco.get(banco.id) ?? 0;
+          const fatura = computeBankFaturaAjustada(
+            banco.id,
+            transactions,
+            monthKey,
+            allBanks,
+            bankPayments,
+          );
           const saldoConta = saldoContaPorBanco.get(banco.id) ?? 0;
-          const totalDevido = fatura + banco.saldoDevedor;
+          const totalDevido = fatura + (mesAtual ? banco.saldoDevedor : 0);
+          const faturaMesAnteriorNaoPaga = mesAtual
+            ? computeBankFaturaAjustada(banco.id, transactions, mesAnterior, allBanks, bankPayments)
+            : 0;
           return (
             <li key={banco.id} className="rounded-card bg-surface px-4 py-3">
               <div className="flex items-center justify-between gap-2">
@@ -55,7 +79,7 @@ export function BankDebtSection({
                     >
                       saldo em conta: {formatCurrency(saldoConta)}
                     </span>
-                    {banco.saldoDevedor > 0 && (
+                    {mesAtual && banco.saldoDevedor > 0 && (
                       <span className="block text-xs text-ink-muted">
                         + {formatCurrency(banco.saldoDevedor)} de saldo anterior
                       </span>
@@ -66,11 +90,22 @@ export function BankDebtSection({
                   <span className="block text-sm font-medium text-negative">
                     {formatCurrency(fatura)}
                   </span>
-                  <span className="block text-[11px] text-ink-muted">fatura deste mês</span>
+                  <span className="block text-[11px] text-ink-muted">
+                    fatura {mesAtual ? "deste mês" : "do mês"}
+                  </span>
                 </span>
               </div>
 
-              {totalDevido > 0 && (
+              {faturaMesAnteriorNaoPaga > 0 && (
+                <p className="mt-2 flex items-start gap-1.5 rounded-xl bg-negative-soft px-3 py-2 text-[11px] text-negative">
+                  <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                  {formatCurrency(faturaMesAnteriorNaoPaga)} da fatura do mês passado ainda não
+                  consta como paga nem está no saldo anterior — pague, ou ajuste na mão em
+                  Configurações.
+                </p>
+              )}
+
+              {mesAtual && totalDevido > 0 && (
                 <button
                   onClick={() => setPaying(banco)}
                   className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-accent bg-accent-soft px-3 py-2 text-xs font-medium text-accent-strong transition-transform active:scale-[0.98] hover:bg-accent/20"
@@ -104,7 +139,12 @@ export function BankDebtSection({
 
       <PayFaturaSheet
         banco={paying}
-        totalDevido={paying ? (gastosMesPorBanco.get(paying.id) ?? 0) + paying.saldoDevedor : 0}
+        totalDevido={
+          paying
+            ? computeBankFaturaAjustada(paying.id, transactions, monthKey, allBanks, bankPayments) +
+              paying.saldoDevedor
+            : 0
+        }
         onPayFatura={onPayFatura}
         onClose={() => setPaying(null)}
       />
@@ -130,12 +170,13 @@ function TransferBankSheet({
   open: boolean;
   banks: Bank[];
   saldoContaPorBanco: Map<string, number>;
-  onTransfer: (fromBancoId: string, toBancoId: string, valor: number) => Promise<void>;
+  onTransfer: (fromBancoId: string, toBancoId: string, valor: number, data?: string) => Promise<void>;
   onClose: () => void;
 }) {
   const [fromId, setFromId] = useState(banks[0]?.id ?? "");
   const [toId, setToId] = useState(banks[1]?.id ?? "");
   const [valor, setValor] = useState(0);
+  const [data, setData] = useState(todayIsoDate());
   const [saving, setSaving] = useState(false);
 
   const fromBanco = banks.find((b) => b.id === fromId);
@@ -160,7 +201,7 @@ function TransferBankSheet({
 
     setSaving(true);
     try {
-      await onTransfer(fromId, toId, valor);
+      await onTransfer(fromId, toId, valor, data);
       toast.success("Transferência feita.");
       setValor(0);
       onClose();
@@ -200,6 +241,12 @@ function TransferBankSheet({
         <CurrencyInput
           value={valor}
           onChange={setValor}
+          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        />
+        <input
+          type="date"
+          value={data}
+          onChange={(event) => setData(event.target.value)}
           className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
         />
 
@@ -242,7 +289,7 @@ function PayFaturaSheet({
 }: {
   banco: Bank | null;
   totalDevido: number;
-  onPayFatura: (id: string, valor: number) => Promise<void>;
+  onPayFatura: (id: string, valor: number, data?: string) => Promise<void>;
   onClose: () => void;
 }) {
   return (
@@ -268,10 +315,11 @@ function PayFaturaFields({
 }: {
   banco: Bank;
   totalDevido: number;
-  onPayFatura: (id: string, valor: number) => Promise<void>;
+  onPayFatura: (id: string, valor: number, data?: string) => Promise<void>;
   onClose: () => void;
 }) {
   const [valor, setValor] = useState(totalDevido);
+  const [data, setData] = useState(todayIsoDate());
   const [saving, setSaving] = useState(false);
 
   async function handleConfirm() {
@@ -286,7 +334,7 @@ function PayFaturaFields({
 
     setSaving(true);
     try {
-      await onPayFatura(banco.id, valor);
+      await onPayFatura(banco.id, valor, data);
       toast.success("Pagamento registrado — saiu do saldo em conta.");
       onClose();
     } catch {
@@ -301,14 +349,20 @@ function PayFaturaFields({
       <p className="mb-1 font-medium">Pagar fatura — {banco.nome}</p>
       <p className="mb-4 text-xs text-ink-muted">
         Total devido: {formatCurrency(totalDevido)} (fatura do mês + saldo anterior). Esse valor
-        sai do saldo em conta do banco. Pra corrigir manualmente o saldo anterior, use o botão de
-        editar em Configurações → Bancos.
+        sai do saldo em conta do banco e some da fatura exibida. Pra corrigir algo na mão, use o
+        botão de editar em Configurações → Bancos.
       </p>
 
       <CurrencyInput
         value={valor}
         onChange={setValor}
         className="w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+      />
+      <input
+        type="date"
+        value={data}
+        onChange={(event) => setData(event.target.value)}
+        className="mt-2 w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
       />
 
       <button
