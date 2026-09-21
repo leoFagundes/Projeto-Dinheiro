@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Eye, EyeOff, LogOut } from "lucide-react";
+import { Eye, EyeOff, HelpCircle, LogOut } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { VisibilityProvider, useValuesVisibility } from "@/lib/visibility-context";
 import { BottomNav } from "@/app/_components/BottomNav";
 import { AddTransactionButton } from "@/app/_components/AddTransactionButton";
+import { HelpModal } from "@/app/_components/HelpModal";
 
 export default function ProtectedLayout({
   children,
@@ -48,6 +49,7 @@ export default function ProtectedLayout({
             </div>
             <div className="flex items-center gap-3">
               <VisibilityToggleButton />
+              <HelpButton />
               <button
                 onClick={() => signOut()}
                 aria-label="Sair"
@@ -80,5 +82,21 @@ function VisibilityToggleButton() {
     >
       {hidden ? <EyeOff size={18} /> : <Eye size={18} />}
     </button>
+  );
+}
+
+function HelpButton() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        aria-label="Como funciona o app"
+        className="text-ink-muted hover:text-ink"
+      >
+        <HelpCircle size={18} />
+      </button>
+      <HelpModal open={open} onClose={() => setOpen(false)} />
+    </>
   );
 }
