@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarClock, History, LayoutDashboard, Settings } from "lucide-react";
+import { CalendarClock, History, LayoutDashboard, Settings, TrendingUp } from "lucide-react";
 
 const ITEMS = [
   { href: "/", label: "Início", icon: LayoutDashboard },
   { href: "/historico", label: "Histórico", icon: History },
+  { href: "/investimentos", label: "Investir", icon: TrendingUp },
   { href: "/calendario", label: "Agenda", icon: CalendarClock },
   { href: "/configuracoes", label: "Ajustes", icon: Settings },
 ];

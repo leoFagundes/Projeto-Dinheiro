@@ -145,6 +145,9 @@ export type PocketTransfer = {
 
 export type InvestmentType = "rendaFixa" | "rendaVariavel";
 
+/** Subclassificação de renda variável — não se aplica a renda fixa. */
+export type InvestmentSubtipo = "acao" | "fii";
+
 /**
  * Um ativo de investimento (ex: "Tesouro Selic", "PETR4"). `valorInvestido` é
  * sempre o total realmente aportado (custo), nunca uma cotação de mercado —
@@ -154,7 +157,11 @@ export type Investment = {
   id: string;
   userId: string;
   nome: string;
+  /** Nota livre opcional (ex: corretora, motivo do investimento, vencimento). */
+  descricao?: string;
   tipo: InvestmentType;
+  /** Só faz sentido quando `tipo` é "rendaVariavel". */
+  subtipo?: InvestmentSubtipo;
   valorInvestido: number;
   /** Total de cotas/ações possuídas — só faz sentido para renda variável. */
   totalCotas?: number;
@@ -211,4 +218,18 @@ export type PatrimonioSnapshot = {
   total: number;
   criadoEm: number;
   atualizadoEm: number;
+};
+
+/**
+ * Meta de valor total da carteira de investimentos (não por ativo). Dá pra
+ * ter várias — funcionam como marcos: ao atingir o valor, a meta fica
+ * marcada como concluída, sem deixar de contar as outras que ainda faltam.
+ */
+export type InvestmentGoal = {
+  id: string;
+  userId: string;
+  /** Rótulo opcional (ex: "Reserva de emergência"). Sem isso, mostra só o valor. */
+  nome?: string;
+  metaValor: number;
+  criadoEm: number;
 };

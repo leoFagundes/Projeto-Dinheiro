@@ -17,7 +17,7 @@ import {
 import { db } from "./firebase";
 import { useAuth } from "./auth-context";
 import { todayIsoDate } from "./format";
-import type { Investment, InvestmentMovement, InvestmentType } from "./types";
+import type { Investment, InvestmentMovement, InvestmentSubtipo, InvestmentType } from "./types";
 
 const COLLECTION = "investments";
 const MOVEMENTS_COLLECTION = "investmentMovements";
@@ -26,32 +26,46 @@ export function useInvestments() {
   const { user } = useAuth();
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
 
     const q = query(collection(db, COLLECTION), where("userId", "==", user.uid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const items = snapshot.docs
-        .map((docSnap) => ({
-          id: docSnap.id,
-          ...(docSnap.data() as Omit<Investment, "id">),
-        }))
-        .sort((a, b) => a.criadoEm - b.criadoEm);
-      setInvestments(items);
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const items = snapshot.docs
+          .map((docSnap) => ({
+            id: docSnap.id,
+            ...(docSnap.data() as Omit<Investment, "id">),
+          }))
+          .sort((a, b) => a.criadoEm - b.criadoEm);
+        setInvestments(items);
+        setLoading(false);
+        setError(null);
+      },
+      (err) => {
+        // Sem isso, uma falha aqui (ex: regra de segurança desatualizada)
+        // ficava 100% invisível — a lista só parecia vazia, sem nenhum aviso.
+        console.error("Erro ao carregar investimentos:", err);
+        setError(err.message);
+        setLoading(false);
+      },
+    );
     return unsubscribe;
   }, [user]);
 
   const addInvestment = useCallback(
-    async (nome: string, tipo: InvestmentType) => {
+    async (nome: string, tipo: InvestmentType, descricao?: string, subtipo?: InvestmentSubtipo) => {
       if (!user) return;
       await addDoc(collection(db, COLLECTION), {
         userId: user.uid,
         nome,
         tipo,
         valorInvestido: 0,
+        ...(descricao ? { descricao } : {}),
+        ...(tipo === "rendaVariavel" && subtipo ? { subtipo } : {}),
         criadoEm: Date.now(),
       });
     },
@@ -59,8 +73,16 @@ export function useInvestments() {
   );
 
   const updateInvestment = useCallback(
-    async (id: string, input: { nome: string; tipo: InvestmentType }) => {
-      await updateDoc(doc(db, COLLECTION, id), input);
+    async (
+      id: string,
+      input: { nome: string; tipo: InvestmentType; descricao?: string; subtipo?: InvestmentSubtipo },
+    ) => {
+      await updateDoc(doc(db, COLLECTION, id), {
+        nome: input.nome,
+        tipo: input.tipo,
+        descricao: input.descricao ? input.descricao : deleteField(),
+        subtipo: input.tipo === "rendaVariavel" && input.subtipo ? input.subtipo : deleteField(),
+      });
     },
     [],
   );
@@ -190,6 +212,7 @@ export function useInvestments() {
   return {
     investments,
     loading,
+    error,
     addInvestment,
     updateInvestment,
     removeInvestment,

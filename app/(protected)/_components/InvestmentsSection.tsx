@@ -9,6 +9,7 @@ import { BottomSheet } from "@/app/_components/BottomSheet";
 import { ConfirmDialog } from "@/app/_components/ConfirmDialog";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import { formatCurrency, formatDate, todayIsoDate } from "@/lib/format";
+import { investmentTypeLabel } from "@/lib/derived";
 import type { Bank, Investment, InvestmentMovement } from "@/lib/types";
 
 export function InvestmentsSection({
@@ -75,7 +76,7 @@ export function InvestmentsSection({
                   </p>
                 )}
                 <p className="mt-1 text-[11px] text-ink-muted">
-                  {investimento.tipo === "rendaVariavel" ? "Renda variável" : "Renda fixa"}
+                  {investmentTypeLabel(investimento)}
                   {investimento.tipo === "rendaVariavel" && investimento.totalCotas
                     ? ` · ${investimento.totalCotas} cotas`
                     : ""}
@@ -244,6 +245,9 @@ function MoveInvestmentFields({
   return (
     <>
       <p className="font-medium">{investment.nome}</p>
+      {investment.descricao && (
+        <p className="text-xs text-ink-muted">{investment.descricao}</p>
+      )}
       <p className="mb-4 text-xs text-ink-muted">
         Total investido: {formatCurrency(investment.valorInvestido)}
         {isVariavel && investment.totalCotas ? ` · ${investment.totalCotas} cotas` : ""}

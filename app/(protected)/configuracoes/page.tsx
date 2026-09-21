@@ -26,7 +26,7 @@ import { useBankPayments } from "@/lib/use-bank-payments";
 import { useBankTransfers } from "@/lib/use-bank-transfers";
 import { useInvestments } from "@/lib/use-investments";
 import { useInvestmentMovements } from "@/lib/use-investment-movements";
-import { computeBankFaturaAjustada, computeBankSaldoConta } from "@/lib/derived";
+import { computeBankFaturaAjustada, computeBankSaldoConta, investmentTypeLabel } from "@/lib/derived";
 import { currentMonthKey, formatCurrency, todayIsoDate } from "@/lib/format";
 import { FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { useScrollToHash } from "@/lib/use-scroll-to-hash";
@@ -35,7 +35,15 @@ import { ConfirmDialog } from "@/app/_components/ConfirmDialog";
 import { EmojiPickerSheet } from "@/app/_components/EmojiPickerSheet";
 import { BottomSheet } from "@/app/_components/BottomSheet";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
-import type { Bank, Category, Investment, InvestmentType, Pocket, TransactionType } from "@/lib/types";
+import type {
+  Bank,
+  Category,
+  Investment,
+  InvestmentSubtipo,
+  InvestmentType,
+  Pocket,
+  TransactionType,
+} from "@/lib/types";
 
 export default function ConfiguracoesPage() {
   useScrollToHash();
@@ -1001,10 +1009,12 @@ function TransferSheet({
 }
 
 function InvestimentosSection() {
-  const { investments, addInvestment, updateInvestment, removeInvestment, setInvestmentOculto } =
+  const { investments, error, addInvestment, updateInvestment, removeInvestment, setInvestmentOculto } =
     useInvestments();
   const [nome, setNome] = useState("");
+  const [descricao, setDescricao] = useState("");
   const [tipo, setTipo] = useState<InvestmentType>("rendaFixa");
+  const [subtipo, setSubtipo] = useState<InvestmentSubtipo | "">("");
   const [removing, setRemoving] = useState<{ id: string; nome: string } | null>(null);
   const [editing, setEditing] = useState<Investment | null>(null);
 
@@ -1014,10 +1024,12 @@ function InvestimentosSection() {
       toast.error("Dê um nome para o investimento.");
       return;
     }
-    await addInvestment(nome.trim(), tipo);
+    await addInvestment(nome.trim(), tipo, descricao.trim() || undefined, subtipo || undefined);
     toast.success("Investimento criado.");
     setNome("");
+    setDescricao("");
     setTipo("rendaFixa");
+    setSubtipo("");
   }
 
   return (
@@ -1030,10 +1042,20 @@ function InvestimentosSection() {
           onChange={(event) => setNome(event.target.value)}
           className="rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
         />
+        <input
+          type="text"
+          placeholder="Descrição (opcional)"
+          value={descricao}
+          onChange={(event) => setDescricao(event.target.value)}
+          className="rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+        />
         <div className="flex gap-2">
           <select
             value={tipo}
-            onChange={(event) => setTipo(event.target.value as InvestmentType)}
+            onChange={(event) => {
+              setTipo(event.target.value as InvestmentType);
+              setSubtipo("");
+            }}
             className="min-w-0 flex-1 rounded-2xl border border-border bg-bg px-3 py-2.5 text-sm outline-none transition-colors focus:border-accent"
           >
             <option value="rendaFixa">Renda fixa</option>
@@ -1047,7 +1069,26 @@ function InvestimentosSection() {
             <Plus size={18} />
           </button>
         </div>
+        {tipo === "rendaVariavel" && (
+          <select
+            value={subtipo}
+            onChange={(event) => setSubtipo(event.target.value as InvestmentSubtipo | "")}
+            className="rounded-2xl border border-border bg-bg px-3 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+          >
+            <option value="">Não classificado</option>
+            <option value="acao">Ação</option>
+            <option value="fii">FII</option>
+          </select>
+        )}
       </form>
+
+      {error && (
+        <p className="mb-3 rounded-xl bg-negative-soft px-3 py-2 text-xs text-negative">
+          Não deu pra carregar seus investimentos ({error}). Seus dados provavelmente continuam
+          salvos — tente recarregar a página; se persistir, pode ser preciso reaplicar as regras
+          de segurança do Firestore.
+        </p>
+      )}
 
       {investments.length > 0 ? (
         <ul className="flex flex-col gap-1.5 text-sm">
@@ -1063,9 +1104,11 @@ function InvestimentosSection() {
                   {inv.nome}
                   {inv.oculto && <span className="ml-1.5 text-xs text-ink-muted">(oculto)</span>}
                 </span>
+                {inv.descricao && (
+                  <span className="block truncate text-xs text-ink-muted">{inv.descricao}</span>
+                )}
                 <span className="text-xs text-ink-muted">
-                  {inv.tipo === "rendaVariavel" ? "Renda variável" : "Renda fixa"} ·{" "}
-                  {formatCurrency(inv.valorInvestido)}
+                  {investmentTypeLabel(inv)} · {formatCurrency(inv.valorInvestido)}
                   {inv.tipo === "rendaVariavel" && inv.totalCotas
                     ? ` · ${inv.totalCotas} cotas`
                     : ""}
@@ -1139,7 +1182,10 @@ function EditInvestmentSheet({
   onClose,
 }: {
   investment: Investment | null;
-  onSave: (id: string, input: { nome: string; tipo: InvestmentType }) => Promise<void>;
+  onSave: (
+    id: string,
+    input: { nome: string; tipo: InvestmentType; descricao?: string; subtipo?: InvestmentSubtipo },
+  ) => Promise<void>;
   onClose: () => void;
 }) {
   return (
@@ -1162,11 +1208,16 @@ function EditInvestmentFields({
   onClose,
 }: {
   investment: Investment;
-  onSave: (id: string, input: { nome: string; tipo: InvestmentType }) => Promise<void>;
+  onSave: (
+    id: string,
+    input: { nome: string; tipo: InvestmentType; descricao?: string; subtipo?: InvestmentSubtipo },
+  ) => Promise<void>;
   onClose: () => void;
 }) {
   const [nome, setNome] = useState(investment.nome);
+  const [descricao, setDescricao] = useState(investment.descricao ?? "");
   const [tipo, setTipo] = useState<InvestmentType>(investment.tipo);
+  const [subtipo, setSubtipo] = useState<InvestmentSubtipo | "">(investment.subtipo ?? "");
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -1176,7 +1227,12 @@ function EditInvestmentFields({
     }
     setSaving(true);
     try {
-      await onSave(investment.id, { nome: nome.trim(), tipo });
+      await onSave(investment.id, {
+        nome: nome.trim(),
+        tipo,
+        descricao: descricao.trim() || undefined,
+        subtipo: subtipo || undefined,
+      });
       toast.success("Investimento atualizado.");
       onClose();
     } catch {
@@ -1197,14 +1253,35 @@ function EditInvestmentFields({
           onChange={(event) => setNome(event.target.value)}
           className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
         />
+        <input
+          type="text"
+          placeholder="Descrição (opcional)"
+          value={descricao}
+          onChange={(event) => setDescricao(event.target.value)}
+          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+        />
         <select
           value={tipo}
-          onChange={(event) => setTipo(event.target.value as InvestmentType)}
+          onChange={(event) => {
+            setTipo(event.target.value as InvestmentType);
+            setSubtipo("");
+          }}
           className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
         >
           <option value="rendaFixa">Renda fixa</option>
           <option value="rendaVariavel">Renda variável</option>
         </select>
+        {tipo === "rendaVariavel" && (
+          <select
+            value={subtipo}
+            onChange={(event) => setSubtipo(event.target.value as InvestmentSubtipo | "")}
+            className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          >
+            <option value="">Não classificado</option>
+            <option value="acao">Ação</option>
+            <option value="fii">FII</option>
+          </select>
+        )}
         <button
           onClick={handleSave}
           disabled={saving}

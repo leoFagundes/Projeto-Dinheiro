@@ -208,7 +208,12 @@ export default function DashboardPage() {
 
         {modoDetalhado && (
           <section id="investimentos" className="scroll-mt-20">
-            <h2 className="mb-3 text-sm font-medium text-ink-muted">Investimentos</h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-medium text-ink-muted">Investimentos</h2>
+              <Link href="/investimentos" className="text-xs text-accent-strong hover:underline">
+                Ver tudo
+              </Link>
+            </div>
             <InvestmentsSection
               investments={visibleInvestments}
               movements={investmentMovements}

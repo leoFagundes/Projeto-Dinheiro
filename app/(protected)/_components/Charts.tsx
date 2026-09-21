@@ -22,7 +22,7 @@ import {
 import { formatCurrency, formatMonthLabel } from "@/lib/format";
 import { EmptyState } from "@/app/_components/EmptyState";
 import { TrendIndicator } from "@/app/_components/TrendIndicator";
-import { Landmark, PieChart as PieChartIcon, TrendingUp, Wallet } from "lucide-react";
+import { PieChart as PieChartIcon, TrendingUp, Wallet, type LucideIcon } from "lucide-react";
 import type { TransactionType } from "@/lib/types";
 
 export function CategoryPieChart({
@@ -188,20 +188,24 @@ export function BreakdownChart({
   );
 }
 
-/** Evolução do patrimônio total mês a mês, a partir dos retratos salvos. */
-export function PatrimonioTrendChart({
+/** Linha/área genérica pra qualquer evolução mensal de um único valor (patrimônio, aportes acumulados, etc.). */
+export function AreaTrendChart({
   data,
+  label,
+  color = "#2a78d6",
+  icon: Icon,
+  emptyTitle,
+  emptyDescription,
 }: {
   data: { monthKey: string; total: number }[];
+  label: string;
+  color?: string;
+  icon: LucideIcon;
+  emptyTitle: string;
+  emptyDescription: string;
 }) {
   if (data.length < 2) {
-    return (
-      <EmptyState
-        icon={Landmark}
-        title="Ainda não há histórico suficiente"
-        description="O app passou a guardar um retrato do seu patrimônio a cada mês — volte aqui com o tempo pra ver a evolução."
-      />
-    );
+    return <EmptyState icon={Icon} title={emptyTitle} description={emptyDescription} />;
   }
 
   return (
@@ -217,18 +221,62 @@ export function PatrimonioTrendChart({
             tickLine={false}
           />
           <Tooltip
-            formatter={(value) => [formatCurrency(Number(value)), "Patrimônio"]}
-            labelFormatter={(label) => formatMonthLabel(String(label))}
+            formatter={(value) => [formatCurrency(Number(value)), label]}
+            labelFormatter={(monthLabel) => formatMonthLabel(String(monthLabel))}
           />
           <Area
             type="monotone"
             dataKey="total"
-            stroke="#2a78d6"
-            fill="#2a78d6"
+            stroke={color}
+            fill={color}
             fillOpacity={0.15}
             strokeWidth={2}
           />
         </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/** Barras genéricas pra um único valor mensal (ex: aportes de investimento por mês). */
+export function SingleSeriesBarChart({
+  data,
+  label,
+  color = "#2a78d6",
+  icon: Icon,
+  emptyTitle,
+  emptyDescription,
+}: {
+  data: { monthKey: string; total: number }[];
+  label: string;
+  color?: string;
+  icon: LucideIcon;
+  emptyTitle: string;
+  emptyDescription: string;
+}) {
+  const hasMovement = data.some((item) => item.total !== 0);
+  if (!hasMovement) {
+    return <EmptyState icon={Icon} title={emptyTitle} description={emptyDescription} />;
+  }
+
+  return (
+    <div className="h-48">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+          <CartesianGrid vertical={false} stroke="#e7e4df" />
+          <XAxis
+            dataKey="monthKey"
+            tickFormatter={(key: string) => formatMonthLabel(key).slice(0, 3)}
+            tick={{ fill: "#79716b", fontSize: 12 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            formatter={(value) => [formatCurrency(Number(value)), label]}
+            labelFormatter={(monthLabel) => formatMonthLabel(String(monthLabel))}
+          />
+          <Bar dataKey="total" fill={color} radius={[4, 4, 0, 0]} />
+        </BarChart>
       </ResponsiveContainer>
     </div>
   );

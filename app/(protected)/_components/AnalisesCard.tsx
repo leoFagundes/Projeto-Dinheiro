@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { BreakdownChart, CategoryPieChart, MonthlyFlowChart, PatrimonioTrendChart } from "./Charts";
+import { Landmark } from "lucide-react";
+import { AreaTrendChart, BreakdownChart, CategoryPieChart, MonthlyFlowChart } from "./Charts";
 import { MonthFilter } from "@/app/_components/MonthFilter";
 import {
   computeBankBreakdown,
@@ -143,7 +144,15 @@ export function AnalisesCard({
             />
           )}
           {tab === "evolucao" && <MonthlyFlowChart data={monthlyFlow} />}
-          {tab === "patrimonio" && <PatrimonioTrendChart data={patrimonioData} />}
+          {tab === "patrimonio" && (
+            <AreaTrendChart
+              data={patrimonioData}
+              label="Patrimônio"
+              icon={Landmark}
+              emptyTitle="Ainda não há histórico suficiente"
+              emptyDescription="O app passou a guardar um retrato do seu patrimônio a cada mês — volte aqui com o tempo pra ver a evolução."
+            />
+          )}
         </motion.div>
       </AnimatePresence>
     </div>

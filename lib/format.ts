@@ -33,6 +33,14 @@ export function monthKeyOfIsoDate(isoDate: string): string {
   return isoDate.slice(0, 7);
 }
 
+export function yearOfIsoDate(isoDate: string): number {
+  return Number(isoDate.slice(0, 4));
+}
+
+export function currentYear(): number {
+  return new Date().getFullYear();
+}
+
 export function addMonthsToKey(monthKey: string, amount: number): string {
   const [year, month] = monthKey.split("-").map(Number);
   const date = new Date(year, month - 1 + amount, 1);

@@ -2,9 +2,11 @@ import {
   addMonthsToKey,
   clampDayToMonth,
   currentMonthKey,
+  currentYear,
   formatCurrency,
   monthKeyOfIsoDate,
   todayIsoDate,
+  yearOfIsoDate,
 } from "./format";
 import type {
   Bank,
@@ -378,6 +380,124 @@ export function computeMonthlyFlowTrend(
   for (let i = months - 1; i >= 0; i--) keys.push(addMonthsToKey(currentKey, -i));
 
   return keys.map((monthKey) => ({ monthKey, ...computeMonthTotals(transactions, monthKey) }));
+}
+
+/** Valor atual da carteira separado por tipo (renda fixa x variável), pra ver a composição. */
+export function computeInvestmentComposition(
+  investments: Investment[],
+): { acoes: number; fiis: number; rendaVariavelOutros: number; rendaFixa: number } {
+  let acoes = 0;
+  let fiis = 0;
+  let rendaVariavelOutros = 0;
+  let rendaFixa = 0;
+  for (const inv of investments) {
+    const valor = inv.saldoAtual ?? inv.valorInvestido;
+    if (inv.tipo === "rendaFixa") {
+      rendaFixa += valor;
+    } else if (inv.subtipo === "acao") {
+      acoes += valor;
+    } else if (inv.subtipo === "fii") {
+      fiis += valor;
+    } else {
+      rendaVariavelOutros += valor;
+    }
+  }
+  return { acoes, fiis, rendaVariavelOutros, rendaFixa };
+}
+
+/** Rótulo de exibição pro tipo de um investimento — usa a subclassificação (Ação/FII) quando houver. */
+export function investmentTypeLabel(investment: Pick<Investment, "tipo" | "subtipo">): string {
+  if (investment.subtipo === "acao") return "Ação";
+  if (investment.subtipo === "fii") return "FII";
+  return investment.tipo === "rendaVariavel" ? "Renda variável" : "Renda fixa";
+}
+
+/** Anos (mais recente primeiro) em que houve pelo menos um movimento de investimento, sempre incluindo o ano atual. */
+export function computeInvestmentYears(movements: InvestmentMovement[]): number[] {
+  const years = new Set(movements.map((m) => yearOfIsoDate(m.data)));
+  years.add(currentYear());
+  return Array.from(years).sort((a, b) => b - a);
+}
+
+/** Total aportado em cada mês (Jan a Dez) de um ano específico, olhando todos os investimentos. */
+export function computeYearlyContributions(
+  movements: InvestmentMovement[],
+  year: number,
+): { monthKey: string; total: number }[] {
+  const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`);
+  return months.map((monthKey) => ({
+    monthKey,
+    total: movements
+      .filter((m) => m.tipo === "aporte" && monthKeyOfIsoDate(m.data) === monthKey)
+      .reduce((sum, m) => sum + m.valor, 0),
+  }));
+}
+
+/**
+ * Evolução acumulada do total aportado (aporte - resgate, mês a mês) desde o
+ * primeiro movimento até o mês atual. Diferente do Patrimônio, dá pra
+ * reconstruir isso retroativo — contribuição tem data exata e não depende de
+ * retrato nenhum, só do histórico que já existe.
+ */
+export function computeCumulativeContributions(
+  movements: InvestmentMovement[],
+): { monthKey: string; total: number }[] {
+  if (movements.length === 0) return [];
+  const aportesResgates = movements.filter((m) => m.tipo === "aporte" || m.tipo === "resgate");
+  if (aportesResgates.length === 0) return [];
+
+  const primeiroMes = aportesResgates.reduce(
+    (min, m) => (monthKeyOfIsoDate(m.data) < min ? monthKeyOfIsoDate(m.data) : min),
+    monthKeyOfIsoDate(aportesResgates[0].data),
+  );
+  const ultimoMes = currentMonthKey();
+
+  const meses: string[] = [];
+  for (let monthKey = primeiroMes; monthKey <= ultimoMes; monthKey = addMonthsToKey(monthKey, 1)) {
+    meses.push(monthKey);
+  }
+
+  let acumulado = 0;
+  return meses.map((monthKey) => {
+    const delta = aportesResgates
+      .filter((m) => monthKeyOfIsoDate(m.data) === monthKey)
+      .reduce((sum, m) => sum + (m.tipo === "aporte" ? m.valor : -m.valor), 0);
+    acumulado += delta;
+    return { monthKey, total: acumulado };
+  });
+}
+
+/**
+ * Ficha mensal de um ativo específico num ano: valor aportado, cotas
+ * compradas e preço médio da compra em cada mês, mais o acumulado de cotas
+ * (desde sempre, não só do ano) — no estilo da planilha de controle manual.
+ */
+export function computeInvestmentYearLedger(
+  investimentoId: string,
+  movements: InvestmentMovement[],
+  year: number,
+): { monthKey: string; valorAportado: number; cotas: number; precoMedio: number | null; cotasAcumuladas: number }[] {
+  const doAtivo = movements
+    .filter((m) => m.investimentoId === investimentoId && (m.tipo === "aporte" || m.tipo === "resgate"))
+    .sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0));
+
+  const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`);
+  let cotasAcumuladas = doAtivo
+    .filter((m) => yearOfIsoDate(m.data) < year)
+    .reduce((sum, m) => sum + (m.tipo === "aporte" ? (m.cotas ?? 0) : -(m.cotas ?? 0)), 0);
+
+  return months.map((monthKey) => {
+    const doMes = doAtivo.filter((m) => monthKeyOfIsoDate(m.data) === monthKey);
+    const aportesDoMes = doMes.filter((m) => m.tipo === "aporte");
+    const valorAportado = aportesDoMes.reduce((sum, m) => sum + m.valor, 0);
+    const cotas = aportesDoMes.reduce((sum, m) => sum + (m.cotas ?? 0), 0);
+    const precoMedio = cotas > 0 ? valorAportado / cotas : null;
+    cotasAcumuladas += doMes.reduce(
+      (sum, m) => sum + (m.tipo === "aporte" ? (m.cotas ?? 0) : -(m.cotas ?? 0)),
+      0,
+    );
+    return { monthKey, valorAportado, cotas, precoMedio, cotasAcumuladas };
+  });
 }
 
 export type HistoryEntryTipo =
