@@ -29,6 +29,7 @@ import { useInvestmentMovements } from "@/lib/use-investment-movements";
 import { computeBankFaturaAjustada, computeBankSaldoConta } from "@/lib/derived";
 import { currentMonthKey, formatCurrency, todayIsoDate } from "@/lib/format";
 import { FALLBACK_CATEGORY_ICON } from "@/lib/categories";
+import { useScrollToHash } from "@/lib/use-scroll-to-hash";
 import { PageFade } from "@/app/_components/PageFade";
 import { ConfirmDialog } from "@/app/_components/ConfirmDialog";
 import { EmojiPickerSheet } from "@/app/_components/EmojiPickerSheet";
@@ -37,6 +38,8 @@ import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import type { Bank, Category, Investment, InvestmentType, Pocket, TransactionType } from "@/lib/types";
 
 export default function ConfiguracoesPage() {
+  useScrollToHash();
+
   return (
     <PageFade>
       <div className="flex flex-col gap-8 pb-8">
