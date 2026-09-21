@@ -1215,13 +1215,48 @@ function EditInvestmentFields({
 }
 
 function ContaSection() {
-  const { user, signOut } = useAuth();
+  const { user, nickname, signOut, updateNickname } = useAuth();
+  const [apelido, setApelido] = useState(nickname ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSaveApelido() {
+    setSaving(true);
+    try {
+      await updateNickname(apelido);
+      toast.success("Apelido atualizado.");
+    } catch {
+      toast.error("Não foi possível salvar o apelido.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <section>
       <h2 className="mb-3 text-sm font-medium text-ink-muted">Conta</h2>
       <div className="rounded-card bg-surface p-4">
         <p className="mb-3 truncate text-sm text-ink-muted">{user?.email}</p>
+
+        <label className="mb-3 flex flex-col gap-1 text-xs text-ink-muted">
+          Apelido (aparece no topo da tela)
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Como quer ser chamado"
+              value={apelido}
+              onChange={(event) => setApelido(event.target.value)}
+              className="min-w-0 flex-1 rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm text-ink outline-none transition-colors focus:border-accent"
+            />
+            <button
+              onClick={handleSaveApelido}
+              disabled={saving || apelido.trim() === (nickname ?? "")}
+              className="shrink-0 rounded-2xl bg-accent px-4 text-sm font-medium text-white transition-transform active:scale-95 hover:bg-accent-strong disabled:opacity-50"
+            >
+              Salvar
+            </button>
+          </div>
+        </label>
+
         <button
           onClick={() => signOut()}
           className="flex items-center gap-2 text-sm font-medium text-negative transition-transform active:scale-95"

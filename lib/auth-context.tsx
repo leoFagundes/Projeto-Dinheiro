@@ -8,6 +8,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
+  updateProfile,
   type User,
 } from "firebase/auth";
 import { createContext, useContext, useEffect, useState } from "react";
@@ -15,29 +16,35 @@ import { auth } from "./firebase";
 
 type AuthContextValue = {
   user: User | null;
+  /** Apelido escolhido pelo usuário (guardado como displayName do Firebase Auth). */
+  nickname: string | null;
   loading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  updateNickname: (nickname: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [nickname, setNickname] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     return onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
+      setNickname(firebaseUser?.displayName ?? null);
       setLoading(false);
     });
   }, []);
 
   const value: AuthContextValue = {
     user,
+    nickname,
     loading,
     signInWithEmail: async (email, password) => {
       await signInWithEmailAndPassword(auth, email, password);
@@ -53,6 +60,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     resetPassword: async (email) => {
       await sendPasswordResetEmail(auth, email);
+    },
+    updateNickname: async (value) => {
+      if (!auth.currentUser) return;
+      const trimmed = value.trim();
+      await updateProfile(auth.currentUser, { displayName: trimmed || null });
+      setNickname(trimmed || null);
     },
   };
 

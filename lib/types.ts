@@ -193,3 +193,22 @@ export type InvestmentMovement = {
   data: string;
   criadoEm: number;
 };
+
+/**
+ * Retrato do patrimônio num mês — um documento por usuário+mês (id
+ * `${userId}_${monthKey}`), atualizado sempre que o app é aberto naquele mês.
+ * Meses passados ficam congelados no último valor visto; sem isso não dava
+ * pra montar um gráfico de evolução, só o valor de agora.
+ */
+export type PatrimonioSnapshot = {
+  id: string;
+  userId: string;
+  monthKey: string;
+  contas: number;
+  caixinhas: number;
+  investimentos: number;
+  dividas: number;
+  total: number;
+  criadoEm: number;
+  atualizadoEm: number;
+};

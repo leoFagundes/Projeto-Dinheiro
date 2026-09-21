@@ -17,6 +17,7 @@ import type {
   PocketMovement,
   PocketTransfer,
   Transaction,
+  TransactionType,
 } from "./types";
 
 export type CalendarEvent = {
@@ -27,6 +28,8 @@ export type CalendarEvent = {
   tipo: Transaction["tipo"];
   /** "transacao": já existe no Firestore. "recorrencia": projeção — ainda não foi gerada. */
   origem: "transacao" | "recorrencia";
+  /** Se é (ou projeta) uma recorrência — usado pra destacar assinaturas/contas fixas na agenda. */
+  recorrente: boolean;
 };
 
 export function computeMonthTotals(transactions: Transaction[], monthKey: string) {
@@ -57,15 +60,37 @@ export function computeDespesasVariacao(
 export function computeCategoryBreakdown(
   transactions: Transaction[],
   monthKey: string,
+  tipo: TransactionType = "despesa",
 ): { categoria: string; total: number }[] {
   const totals = new Map<string, number>();
   for (const t of transactions) {
-    if (t.tipo !== "despesa" || monthKeyOfIsoDate(t.data) !== monthKey) continue;
+    if (t.tipo !== tipo || monthKeyOfIsoDate(t.data) !== monthKey) continue;
     totals.set(t.categoria, (totals.get(t.categoria) ?? 0) + t.valor);
   }
   return Array.from(totals, ([categoria, total]) => ({ categoria, total })).sort(
     (a, b) => b.total - a.total,
   );
+}
+
+/**
+ * Despesas do mês agrupadas por forma de pagamento: crédito (fica na fatura),
+ * débito (sai na hora) e sem banco vinculado (dinheiro/pix, não passa por
+ * cartão nenhum). Sem banco não tem `formaPagamento` definido.
+ */
+export function computeFormaPagamentoBreakdown(
+  transactions: Transaction[],
+  monthKey: string,
+): { credito: number; debito: number; semBanco: number } {
+  let credito = 0;
+  let debito = 0;
+  let semBanco = 0;
+  for (const t of transactions) {
+    if (t.tipo !== "despesa" || monthKeyOfIsoDate(t.data) !== monthKey) continue;
+    if (!t.bancoId) semBanco += t.valor;
+    else if (t.formaPagamento === "debito") debito += t.valor;
+    else credito += t.valor;
+  }
+  return { credito, debito, semBanco };
 }
 
 /**
@@ -199,7 +224,14 @@ export function computePatrimonio(
   bankPayments: BankPayment[],
   investmentMovements: InvestmentMovement[],
   bankTransfers: BankTransfer[] = [],
-): { contas: number; caixinhas: number; investimentos: number; dividas: number; total: number } {
+): {
+  contas: number;
+  caixinhas: number;
+  investimentos: number;
+  dividas: number;
+  saldoLivre: number;
+  total: number;
+} {
   const contas = banks.reduce(
     (sum, b) =>
       sum +
@@ -227,6 +259,8 @@ export function computePatrimonio(
     caixinhas,
     investimentos,
     dividas,
+    /** Dinheiro em conta já descontando o que está comprometido nas faturas — o que sobra de verdade. */
+    saldoLivre: contas - dividas,
     total: contas + caixinhas + investimentos - dividas,
   };
 }
@@ -262,6 +296,7 @@ export function computeMonthEvents(
         valor: t.valor,
         tipo: t.tipo,
         origem: "transacao",
+        recorrente: t.recorrente,
       });
     }
   }
@@ -286,6 +321,7 @@ export function computeMonthEvents(
       valor: template.valor,
       tipo: template.tipo,
       origem: "recorrencia",
+      recorrente: true,
     });
   }
 
@@ -301,12 +337,30 @@ export function computeUpcomingEvents(transactions: Transaction[], days = 7): Ca
 
   const startMonth = monthKeyOfIsoDate(start);
   const endMonth = monthKeyOfIsoDate(end);
-  const monthsToCheck = startMonth === endMonth ? [startMonth] : [startMonth, endMonth];
+  // Uma janela de 30 dias pode atravessar até 3 meses diferentes (ex: começando
+  // dia 31/jan), então percorre mês a mês em vez de assumir só início e fim.
+  const monthsToCheck: string[] = [];
+  for (let monthKey = startMonth; monthKey <= endMonth; monthKey = addMonthsToKey(monthKey, 1)) {
+    monthsToCheck.push(monthKey);
+  }
 
   return monthsToCheck
     .flatMap((monthKey) => computeMonthEvents(transactions, monthKey))
     .filter((event) => event.data >= start && event.data <= end)
     .sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0));
+}
+
+/**
+ * Projeta o saldo (receitas - despesas) do mês até o fim: soma o que já está
+ * lançado (inclusive parcelas/recorrências futuras já geradas nesse mês) com
+ * o que ainda falta gerar de recorrências que só existem como projeção.
+ */
+export function computeProjectedMonthBalance(transactions: Transaction[], monthKey: string): number {
+  const { saldoMes } = computeMonthTotals(transactions, monthKey);
+  const projetado = computeMonthEvents(transactions, monthKey)
+    .filter((e) => e.origem === "recorrencia")
+    .reduce((sum, e) => sum + (e.tipo === "receita" ? e.valor : -e.valor), 0);
+  return saldoMes + projetado;
 }
 
 /**

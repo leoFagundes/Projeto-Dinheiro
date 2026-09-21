@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useTransactions } from "@/lib/use-transactions";
 import { useCategoryGoals } from "@/lib/use-category-goals";
 import { useCategories } from "@/lib/use-categories";
@@ -11,16 +13,17 @@ import { usePockets } from "@/lib/use-pockets";
 import { usePocketMovements } from "@/lib/use-pocket-movements";
 import { useInvestments } from "@/lib/use-investments";
 import { useInvestmentMovements } from "@/lib/use-investment-movements";
+import { usePatrimonioHistory } from "@/lib/use-patrimonio-history";
 import { assignCategoryColors, mapCategoryIcons } from "@/lib/categories";
 import {
   computeBankSaldoConta,
-  computeDespesasVariacao,
   computeMonthlyFlowTrend,
   computeMonthTotals,
   computePatrimonio,
+  computeProjectedMonthBalance,
   computeUpcomingEvents,
 } from "@/lib/derived";
-import { currentMonthKey } from "@/lib/format";
+import { addMonthsToKey, currentMonthKey } from "@/lib/format";
 import { PageFade } from "@/app/_components/PageFade";
 import { DashboardSkeleton } from "@/app/_components/Skeleton";
 import { SummaryCards } from "./_components/SummaryCards";
@@ -32,6 +35,18 @@ import { BankDebtSection } from "./_components/BankDebtSection";
 import { CategoryGoals } from "./_components/CategoryGoals";
 import { PocketsSection } from "./_components/PocketsSection";
 import { InvestmentsSection } from "./_components/InvestmentsSection";
+
+const MODO_DETALHADO_KEY = "modoDetalhado";
+
+function readModoDetalhado(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const saved = localStorage.getItem(MODO_DETALHADO_KEY);
+    return saved === null ? true : saved === "1";
+  } catch {
+    return true;
+  }
+}
 
 export default function DashboardPage() {
   const { transactions, loading, deleteTransaction } = useTransactions();
@@ -50,9 +65,19 @@ export default function DashboardPage() {
     deleteInvestmentMovement,
   } = useInvestments();
   const { movements: investmentMovements } = useInvestmentMovements();
+  const { snapshots: patrimonioHistorico, syncSnapshot } = usePatrimonioHistory();
+  const [modoDetalhado, setModoDetalhado] = useState(readModoDetalhado);
 
-  if (loading) {
-    return <DashboardSkeleton />;
+  function toggleModoDetalhado() {
+    setModoDetalhado((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(MODO_DETALHADO_KEY, next ? "1" : "0");
+      } catch {
+        // sem persistência, tudo bem
+      }
+      return next;
+    });
   }
 
   const thisMonth = currentMonthKey();
@@ -66,9 +91,32 @@ export default function DashboardPage() {
     investmentMovements,
     bankTransfers,
   );
-  const upcomingEvents = computeUpcomingEvents(transactions, 7);
+
+  const patrimonioSyncRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (loading) return;
+    if (patrimonioSyncRef.current === patrimonio.total) return;
+    patrimonioSyncRef.current = patrimonio.total;
+    syncSnapshot(thisMonth, {
+      contas: patrimonio.contas,
+      caixinhas: patrimonio.caixinhas,
+      investimentos: patrimonio.investimentos,
+      dividas: patrimonio.dividas,
+      total: patrimonio.total,
+    });
+  }, [loading, patrimonio, thisMonth, syncSnapshot]);
+
+  if (loading) {
+    return <DashboardSkeleton />;
+  }
+
+  const upcomingEvents = computeUpcomingEvents(transactions, 30);
   const { receitas, despesas } = computeMonthTotals(transactions, thisMonth);
-  const variacaoDespesas = computeDespesasVariacao(transactions, thisMonth);
+  const despesasMesAnterior = computeMonthTotals(
+    transactions,
+    addMonthsToKey(thisMonth, -1),
+  ).despesas;
+  const saldoProjetadoMes = computeProjectedMonthBalance(transactions, thisMonth);
   const monthlyFlow = computeMonthlyFlowTrend(transactions, 6);
   const colorByCategoria = assignCategoryColors(categories);
   const iconByCategoria = mapCategoryIcons(categories);
@@ -100,14 +148,15 @@ export default function DashboardPage() {
           patrimonio={patrimonio}
           receitasMes={receitas}
           despesasMes={despesas}
-          variacaoDespesas={variacaoDespesas}
+          despesasMesAnterior={despesasMesAnterior}
+          saldoProjetadoMes={saldoProjetadoMes}
         />
 
         <DashboardQuickNav />
 
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-ink-muted">Próximos dias</h2>
+            <h2 className="text-sm font-medium text-ink-muted">Próximos 30 dias</h2>
             <Link href="/calendario" className="text-xs text-accent-strong hover:underline">
               Ver agenda
             </Link>
@@ -157,41 +206,66 @@ export default function DashboardPage() {
           />
         </section>
 
-        <section id="investimentos" className="scroll-mt-20">
-          <h2 className="mb-3 text-sm font-medium text-ink-muted">Investimentos</h2>
-          <InvestmentsSection
-            investments={visibleInvestments}
-            movements={investmentMovements}
-            banks={banks}
-            onMove={moveInvestment}
-            onRegistrarRendimento={registrarRendimentoInvestimento}
-            onDeleteMovement={deleteInvestmentMovement}
-          />
-        </section>
+        {modoDetalhado && (
+          <section id="investimentos" className="scroll-mt-20">
+            <h2 className="mb-3 text-sm font-medium text-ink-muted">Investimentos</h2>
+            <InvestmentsSection
+              investments={visibleInvestments}
+              movements={investmentMovements}
+              banks={banks}
+              onMove={moveInvestment}
+              onRegistrarRendimento={registrarRendimentoInvestimento}
+              onDeleteMovement={deleteInvestmentMovement}
+            />
+          </section>
+        )}
 
-        <section id="analises" className="scroll-mt-20">
-          <h2 className="mb-3 text-sm font-medium text-ink-muted">Análises</h2>
-          <AnalisesCard
-            transactions={transactions}
-            colorByCategoria={colorByCategoria}
-            iconByCategoria={iconByCategoria}
-            monthlyFlow={monthlyFlow}
-          />
-        </section>
+        {modoDetalhado && (
+          <section id="analises" className="scroll-mt-20">
+            <h2 className="mb-3 text-sm font-medium text-ink-muted">Análises</h2>
+            <AnalisesCard
+              transactions={transactions}
+              banks={banks}
+              patrimonioHistorico={patrimonioHistorico}
+              colorByCategoria={colorByCategoria}
+              iconByCategoria={iconByCategoria}
+              monthlyFlow={monthlyFlow}
+            />
+          </section>
+        )}
 
-        <section id="metas" className="scroll-mt-20">
-          <h2 className="mb-3 text-sm font-medium text-ink-muted">Limite de gastos por categoria</h2>
-          <CategoryGoals
-            goals={goalsValidos}
-            overrides={goalOverridesValidos}
-            transactions={transactions}
-            iconByCategoria={iconByCategoria}
-            onSetGoal={setGoal}
-            onRemoveGoal={removeGoal}
-            onSetGoalOverride={setGoalOverride}
-            onRemoveGoalOverride={removeGoalOverride}
-          />
-        </section>
+        {modoDetalhado && (
+          <section id="metas" className="scroll-mt-20">
+            <h2 className="mb-3 text-sm font-medium text-ink-muted">Limite de gastos por categoria</h2>
+            <CategoryGoals
+              goals={goalsValidos}
+              overrides={goalOverridesValidos}
+              transactions={transactions}
+              iconByCategoria={iconByCategoria}
+              onSetGoal={setGoal}
+              onRemoveGoal={removeGoal}
+              onSetGoalOverride={setGoalOverride}
+              onRemoveGoalOverride={removeGoalOverride}
+            />
+          </section>
+        )}
+
+        <button
+          onClick={toggleModoDetalhado}
+          className="flex items-center justify-center gap-1.5 self-center text-sm text-ink-muted transition-transform active:scale-95 hover:text-ink"
+        >
+          {modoDetalhado ? (
+            <>
+              <ChevronUp size={16} />
+              Mostrar menos
+            </>
+          ) : (
+            <>
+              <ChevronDown size={16} />
+              Mostrar investimentos, análises e metas
+            </>
+          )}
+        </button>
       </div>
     </PageFade>
   );

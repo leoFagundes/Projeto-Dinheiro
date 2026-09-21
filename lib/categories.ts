@@ -28,7 +28,7 @@ export function categoryKey(tipo: TransactionType, nome: string): string {
  * a cor de cada uma é atribuída pela posição em que foi criada — nunca por
  * valor/ranking — e cicla se houver mais categorias do que cores.
  */
-const CATEGORY_PALETTE = [
+export const CATEGORY_PALETTE = [
   "#2a78d6",
   "#eb6834",
   "#1baf7a",

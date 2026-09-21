@@ -1,22 +1,25 @@
-import { Money } from "@/app/_components/Money";
-import { formatCurrency } from "@/lib/format";
+import { Money, MaskedCurrency } from "@/app/_components/Money";
+import { TrendIndicator } from "@/app/_components/TrendIndicator";
 
 export function SummaryCards({
   patrimonio,
   receitasMes,
   despesasMes,
-  variacaoDespesas,
+  despesasMesAnterior,
+  saldoProjetadoMes,
 }: {
   patrimonio: {
     contas: number;
     caixinhas: number;
     investimentos: number;
     dividas: number;
+    saldoLivre: number;
     total: number;
   };
   receitasMes: number;
   despesasMes: number;
-  variacaoDespesas: number | null;
+  despesasMesAnterior: number | null;
+  saldoProjetadoMes: number;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -25,14 +28,27 @@ export function SummaryCards({
         <p className="mt-1 text-3xl font-semibold">
           <Money value={patrimonio.total} />
         </p>
+        {patrimonio.dividas > 0 && (
+          <p className="mt-0.5 text-xs text-ink-muted">
+            <MaskedCurrency value={patrimonio.saldoLivre} /> livres depois de pagar as faturas
+          </p>
+        )}
         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-muted">
-          <span>Contas: {formatCurrency(patrimonio.contas)}</span>
-          <span>Caixinhas: {formatCurrency(patrimonio.caixinhas)}</span>
+          <span>
+            Contas: <MaskedCurrency value={patrimonio.contas} />
+          </span>
+          <span>
+            Caixinhas: <MaskedCurrency value={patrimonio.caixinhas} />
+          </span>
           {patrimonio.investimentos > 0 && (
-            <span>Investimentos: {formatCurrency(patrimonio.investimentos)}</span>
+            <span>
+              Investimentos: <MaskedCurrency value={patrimonio.investimentos} />
+            </span>
           )}
           {patrimonio.dividas > 0 && (
-            <span className="text-negative">Fatura: -{formatCurrency(patrimonio.dividas)}</span>
+            <span className="text-negative">
+              Fatura: -<MaskedCurrency value={patrimonio.dividas} />
+            </span>
           )}
         </div>
       </div>
@@ -41,25 +57,38 @@ export function SummaryCards({
         <div className="rounded-card bg-surface p-4">
           <p className="text-xs text-ink-muted">Receitas do mês</p>
           <p className="mt-1 text-lg font-medium text-accent-strong">
-            {formatCurrency(receitasMes)}
+            <MaskedCurrency value={receitasMes} />
           </p>
         </div>
         <div className="rounded-card bg-surface p-4">
           <p className="text-xs text-ink-muted">Despesas do mês</p>
           <p className="mt-1 text-lg font-medium text-negative">
-            {formatCurrency(despesasMes)}
+            <MaskedCurrency value={despesasMes} />
           </p>
-          {variacaoDespesas !== null && (
-            <p
-              className={`mt-0.5 text-xs ${
-                variacaoDespesas > 0 ? "text-negative" : "text-accent-strong"
-              }`}
-            >
-              {variacaoDespesas > 0 ? "+" : ""}
-              {variacaoDespesas.toFixed(0)}% vs mês anterior
+          {despesasMesAnterior !== null && despesasMesAnterior !== 0 && (
+            <p className="mt-0.5">
+              <TrendIndicator
+                current={despesasMes}
+                previous={despesasMesAnterior}
+                invert
+                className="text-xs"
+              />
+              <span className="ml-1 text-xs text-ink-muted">vs mês anterior</span>
             </p>
           )}
         </div>
+      </div>
+
+      <div className="rounded-card bg-surface p-4">
+        <p className="text-xs text-ink-muted">Saldo projetado do mês</p>
+        <p
+          className={`mt-1 text-lg font-medium ${saldoProjetadoMes < 0 ? "text-negative" : "text-accent-strong"}`}
+        >
+          <MaskedCurrency value={saldoProjetadoMes} />
+        </p>
+        <p className="mt-0.5 text-xs text-ink-muted">
+          Receitas menos despesas já lançadas e previstas até o fim do mês.
+        </p>
       </div>
     </div>
   );

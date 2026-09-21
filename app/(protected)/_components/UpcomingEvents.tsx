@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, Repeat } from "lucide-react";
 import { EmptyState } from "@/app/_components/EmptyState";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { CalendarEvent } from "@/lib/derived";
@@ -26,7 +26,12 @@ export function UpcomingEvents({ events }: { events: CalendarEvent[] }) {
               className="flex items-center justify-between gap-3 rounded-card bg-surface px-4 py-3 text-sm"
             >
               <span className="min-w-0">
-                <span className="block truncate font-medium">{event.descricao}</span>
+                <span className="flex items-center gap-1.5 truncate font-medium">
+                  {event.recorrente && (
+                    <Repeat size={12} className="shrink-0 text-ink-muted" aria-label="Recorrente" />
+                  )}
+                  <span className="truncate">{event.descricao}</span>
+                </span>
                 <span className="text-xs text-ink-muted">
                   {formatDate(event.data)}
                   {event.origem === "recorrencia" ? " · previsto" : ""}
