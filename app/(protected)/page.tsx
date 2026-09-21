@@ -111,7 +111,7 @@ export default function DashboardPage() {
     return <DashboardSkeleton />;
   }
 
-  const upcomingEvents = computeUpcomingEvents(transactions, 30);
+  const upcomingEvents = computeUpcomingEvents(transactions, 7);
   const { receitas, despesas } = computeMonthTotals(transactions, thisMonth);
   const despesasMesAnterior = computeMonthTotals(
     transactions,
@@ -158,12 +158,17 @@ export default function DashboardPage() {
 
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-ink-muted">Próximos 30 dias</h2>
+            <h2 className="text-sm font-medium text-ink-muted">Próximos 7 dias</h2>
             <Link href="/calendario" className="text-xs text-accent-strong hover:underline">
               Ver agenda
             </Link>
           </div>
-          <UpcomingEvents events={upcomingEvents} />
+          <UpcomingEvents
+            events={upcomingEvents}
+            colorByCategoria={colorByCategoria}
+            iconByCategoria={iconByCategoria}
+            bankNameById={bankNameById}
+          />
         </section>
 
         <section id="bancos" className="scroll-mt-20">

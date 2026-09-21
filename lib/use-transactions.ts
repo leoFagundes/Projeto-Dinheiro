@@ -128,6 +128,71 @@ export function useTransactions() {
     [user],
   );
 
+  /**
+   * Registra um empréstimo: o valor recebido entra como receita na data em
+   * que caiu na conta (soma no saldo em conta do banco), e o valor total a
+   * pagar é dividido em N parcelas no débito a partir da data da 1ª parcela
+   * — datas diferentes de propósito, já que o dinheiro costuma cair antes do
+   * vencimento da primeira cobrança. Cada parcela só desconta da conta no
+   * próprio dia (ver computeBankSaldoConta), então dá pra planejar deixando o
+   * dinheiro reservado antes de cada cobrança chegar.
+   */
+  const addLoan = useCallback(
+    async (
+      input: {
+        valorRecebido: number;
+        valorTotalPagar: number;
+        categoria: string;
+        descricao: string;
+        dataRecebimento: string;
+        dataPrimeiraParcela: string;
+        bancoId: string;
+      },
+      numParcelas: number,
+    ) => {
+      if (!user) return;
+      const valores = splitInstallments(input.valorTotalPagar, numParcelas);
+      const compraId = crypto.randomUUID();
+      const baseMonth = monthKeyOfIsoDate(input.dataPrimeiraParcela);
+      const originalDay = Number(input.dataPrimeiraParcela.slice(8, 10));
+
+      await addDoc(collection(db, COLLECTION), {
+        userId: user.uid,
+        valor: input.valorRecebido,
+        tipo: "receita" as const,
+        categoria: "Empréstimo",
+        descricao: `Empréstimo recebido — ${input.descricao}`,
+        data: input.dataRecebimento,
+        recorrente: false,
+        bancoId: input.bancoId,
+        criadoEm: Date.now(),
+      });
+
+      await Promise.all(
+        valores.map((valor, index) => {
+          const monthKey = addMonthsToKey(baseMonth, index);
+          const day = clampDayToMonth(monthKey, originalDay);
+          return addDoc(collection(db, COLLECTION), {
+            userId: user.uid,
+            valor,
+            tipo: "despesa" as const,
+            categoria: input.categoria,
+            descricao: input.descricao,
+            data: `${monthKey}-${day}`,
+            recorrente: false,
+            bancoId: input.bancoId,
+            formaPagamento: "debito" as const,
+            compraId,
+            parcelaAtual: index + 1,
+            parcelaTotal: numParcelas,
+            criadoEm: Date.now(),
+          });
+        }),
+      );
+    },
+    [user],
+  );
+
   const updateTransaction = useCallback(async (id: string, input: TransactionUpdateInput) => {
     const { bancoId, formaPagamento, recorrenteFim, recorrenciaIntervalo, ...rest } = input;
     const payload: Record<string, unknown> = { ...rest };
@@ -216,6 +281,7 @@ export function useTransactions() {
     loading,
     addTransaction,
     addInstallmentPurchase,
+    addLoan,
     updateTransaction,
     deleteTransaction,
     cancelRemainingInstallments,

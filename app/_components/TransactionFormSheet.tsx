@@ -42,8 +42,13 @@ function TransactionFormFields({
   transaction?: Transaction;
   onClose: () => void;
 }) {
-  const { addTransaction, addInstallmentPurchase, updateTransaction, cancelRemainingInstallments } =
-    useTransactions();
+  const {
+    addTransaction,
+    addInstallmentPurchase,
+    addLoan,
+    updateTransaction,
+    cancelRemainingInstallments,
+  } = useTransactions();
   const { byType: categoriesByType } = useCategories();
   const { banks } = useBanks();
   const [submitting, setSubmitting] = useState(false);
@@ -57,7 +62,11 @@ function TransactionFormFields({
   // de gerar. Sem avisar isso, parecia um ajuste só daquele mês.
   const isRecurringTemplate = isEditing && Boolean(transaction?.recorrente) && !isRecurringChild;
 
-  const [tipo, setTipo] = useState<TransactionType>(transaction?.tipo ?? "despesa");
+  // "Empréstimo" é um modo de criação à parte (gera receita + parcelas de
+  // uma vez, ver addLoan) — não existe como `tipo` de verdade no Firestore,
+  // então nunca aparece ao editar uma transação já salva.
+  const [modo, setModo] = useState<TransactionType | "emprestimo">(transaction?.tipo ?? "despesa");
+  const tipo: TransactionType = modo === "emprestimo" ? "despesa" : modo;
   const [valor, setValor] = useState(transaction?.valor ?? 0);
   const [categoriaEscolhida, setCategoriaEscolhida] = useState(transaction?.categoria ?? "");
   const [bancoId, setBancoId] = useState(transaction?.bancoId ?? "");
@@ -74,6 +83,9 @@ function TransactionFormFields({
   const [parcelar, setParcelar] = useState(false);
   const [numParcelas, setNumParcelas] = useState("2");
   const [parcelaInicial, setParcelaInicial] = useState("1");
+  const [valorTotalPagar, setValorTotalPagar] = useState(0);
+  const [numParcelasEmprestimo, setNumParcelasEmprestimo] = useState("2");
+  const [dataPrimeiraParcela, setDataPrimeiraParcela] = useState(todayIsoDate());
 
   const categoriaOptions = categoriesByType(tipo);
   // Deriva a categoria efetivamente selecionada em vez de sincronizar via
@@ -84,17 +96,26 @@ function TransactionFormFields({
 
   // Parcelamento só faz sentido para uma despesa nova, no crédito, vinculada a um banco.
   const podeParcelar =
-    !isEditing && tipo === "despesa" && bancoId !== "" && formaPagamento === "credito";
+    !isEditing && modo === "despesa" && bancoId !== "" && formaPagamento === "credito";
   const parcelasCount = Math.min(24, Math.max(2, Math.round(Number(numParcelas)) || 2));
   const parcelaInicialCount = Math.min(
     parcelasCount,
     Math.max(1, Math.round(Number(parcelaInicial)) || 1),
   );
 
-  function changeTipo(next: TransactionType) {
-    setTipo(next);
-    if (next !== "despesa") {
-      setParcelar(false);
+  // Empréstimo: valor recebido vira receita na hora; valor total a pagar
+  // vira parcelas no débito.
+  const isEmprestimo = !isEditing && modo === "emprestimo";
+  const parcelasCountEmprestimo = Math.min(
+    120,
+    Math.max(1, Math.round(Number(numParcelasEmprestimo)) || 1),
+  );
+
+  function changeModo(next: TransactionType | "emprestimo") {
+    setModo(next);
+    if (next !== "despesa") setParcelar(false);
+    if (next === "emprestimo" && !bancoId && banks.length > 0) {
+      setBancoId(banks[0].id);
     }
   }
 
@@ -109,6 +130,7 @@ function TransactionFormFields({
   }
 
   function resetForm() {
+    setModo("despesa");
     setValor(0);
     setDescricao("");
     setData(todayIsoDate());
@@ -119,6 +141,9 @@ function TransactionFormFields({
     setNumParcelas("2");
     setParcelaInicial("1");
     setFormaPagamento("credito");
+    setValorTotalPagar(0);
+    setNumParcelasEmprestimo("2");
+    setDataPrimeiraParcela(todayIsoDate());
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -133,6 +158,14 @@ function TransactionFormFields({
     }
     if (!categoria) {
       toast.error("Cadastre uma categoria antes de continuar.");
+      return;
+    }
+    if (isEmprestimo && !bancoId) {
+      toast.error("Selecione um banco para o empréstimo.");
+      return;
+    }
+    if (isEmprestimo && (!valorTotalPagar || valorTotalPagar <= 0)) {
+      toast.error("Informe o valor total a pagar do empréstimo.");
       return;
     }
 
@@ -159,6 +192,20 @@ function TransactionFormFields({
           parcelaInicialCount,
         );
         toast.success(`Compra parcelada em ${parcelasCount}x.`);
+      } else if (isEmprestimo) {
+        await addLoan(
+          {
+            valorRecebido: valor,
+            valorTotalPagar,
+            categoria,
+            descricao: descricao.trim(),
+            dataRecebimento: data,
+            dataPrimeiraParcela,
+            bancoId,
+          },
+          parcelasCountEmprestimo,
+        );
+        toast.success(`Empréstimo registrado em ${parcelasCountEmprestimo}x no débito.`);
       } else {
         await addTransaction({
           valor,
@@ -220,12 +267,16 @@ function TransactionFormFields({
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-2">
+        <div
+          className={`grid gap-2 ${
+            !isEditing && banks.length > 0 ? "grid-cols-3" : "grid-cols-2"
+          }`}
+        >
           <button
             type="button"
-            onClick={() => changeTipo("despesa")}
+            onClick={() => changeModo("despesa")}
             className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition-colors ${
-              tipo === "despesa"
+              modo === "despesa"
                 ? "border-negative bg-negative-soft text-negative"
                 : "border-border text-ink-muted"
             }`}
@@ -234,17 +285,33 @@ function TransactionFormFields({
           </button>
           <button
             type="button"
-            onClick={() => changeTipo("receita")}
+            onClick={() => changeModo("receita")}
             className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition-colors ${
-              tipo === "receita"
+              modo === "receita"
                 ? "border-accent bg-accent-soft text-accent-strong"
                 : "border-border text-ink-muted"
             }`}
           >
             Receita
           </button>
+          {!isEditing && banks.length > 0 && (
+            <button
+              type="button"
+              onClick={() => changeModo("emprestimo")}
+              className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+                modo === "emprestimo"
+                  ? "border-accent bg-accent-soft text-accent-strong"
+                  : "border-border text-ink-muted"
+              }`}
+            >
+              Empréstimo
+            </button>
+          )}
         </div>
 
+        {isEmprestimo && (
+          <p className="-mb-1 text-xs text-ink-muted">Valor que você vai receber agora</p>
+        )}
         <CurrencyInput
           value={valor}
           onChange={setValor}
@@ -287,7 +354,7 @@ function TransactionFormFields({
             onChange={(event) => changeBanco(event.target.value)}
             className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
           >
-            <option value="">Sem banco vinculado</option>
+            {!isEmprestimo && <option value="">Sem banco vinculado</option>}
             {banks.map((banco) => (
               <option key={banco.id} value={banco.id}>
                 {banco.nome}
@@ -296,7 +363,7 @@ function TransactionFormFields({
           </select>
         )}
 
-        {tipo === "despesa" && bancoId !== "" && (
+        {tipo === "despesa" && bancoId !== "" && !isEmprestimo && (
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -370,6 +437,44 @@ function TransactionFormFields({
           </div>
         )}
 
+        {isEmprestimo && (
+          <div className="rounded-2xl bg-bg px-4 py-3">
+            <p className="text-xs text-ink-muted">Valor total a pagar (com juros, se houver)</p>
+            <CurrencyInput
+              value={valorTotalPagar}
+              onChange={setValorTotalPagar}
+              className="mt-2 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none transition-colors focus:border-accent"
+            />
+            <label className="mt-3 flex items-center gap-2 text-xs text-ink-muted">
+              Em
+              <input
+                type="number"
+                min="1"
+                max="120"
+                value={numParcelasEmprestimo}
+                onChange={(event) => setNumParcelasEmprestimo(event.target.value)}
+                className="w-16 rounded-xl border border-border bg-surface px-2 py-1.5 text-sm outline-none transition-colors focus:border-accent"
+              />
+              vezes, no débito
+            </label>
+            <p className="mt-3 text-xs text-ink-muted">Data da 1ª parcela</p>
+            <input
+              type="date"
+              value={dataPrimeiraParcela}
+              onChange={(event) => setDataPrimeiraParcela(event.target.value)}
+              className="mt-2 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none transition-colors focus:border-accent"
+            />
+            <span className="mt-2 block text-xs text-ink-muted">
+              {parcelasCountEmprestimo}x de{" "}
+              {formatCurrency((valorTotalPagar || 0) / parcelasCountEmprestimo)} — cada parcela só sai
+              da conta no próprio dia, a partir da data acima
+            </span>
+          </div>
+        )}
+
+        {isEmprestimo && (
+          <p className="-mb-1 text-xs text-ink-muted">Data em que o dinheiro cai na conta</p>
+        )}
         <input
           type="date"
           value={data}
@@ -392,7 +497,7 @@ function TransactionFormFields({
           </div>
         )}
 
-        {parcelar ? null : isRecurringChild ? (
+        {parcelar || isEmprestimo ? null : isRecurringChild ? (
           <div className="flex items-center justify-between rounded-2xl bg-bg px-4 py-3 text-sm text-ink-muted">
             Parte de uma recorrência
             <button

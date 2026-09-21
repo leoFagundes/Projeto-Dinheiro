@@ -28,10 +28,15 @@ export type CalendarEvent = {
   descricao: string;
   valor: number;
   tipo: Transaction["tipo"];
+  categoria: string;
   /** "transacao": já existe no Firestore. "recorrencia": projeção — ainda não foi gerada. */
   origem: "transacao" | "recorrencia";
   /** Se é (ou projeta) uma recorrência — usado pra destacar assinaturas/contas fixas na agenda. */
   recorrente: boolean;
+  bancoId?: string;
+  formaPagamento?: FormaPagamento;
+  parcelaAtual?: number;
+  parcelaTotal?: number;
 };
 
 /**
@@ -455,8 +460,13 @@ export function computeMonthEvents(
         descricao: t.descricao,
         valor: t.valor,
         tipo: t.tipo,
+        categoria: t.categoria,
         origem: "transacao",
         recorrente: t.recorrente,
+        bancoId: t.bancoId,
+        formaPagamento: t.formaPagamento,
+        parcelaAtual: t.parcelaAtual,
+        parcelaTotal: t.parcelaTotal,
       });
     }
   }
@@ -483,8 +493,11 @@ export function computeMonthEvents(
       descricao: template.descricao,
       valor: template.valor,
       tipo: template.tipo,
+      categoria: template.categoria,
       origem: "recorrencia",
       recorrente: true,
+      bancoId: template.bancoId,
+      formaPagamento: template.formaPagamento,
     });
   }
 
