@@ -903,6 +903,7 @@ function BancosSection() {
   const [nome, setNome] = useState("");
   const [saldoDevedor, setSaldoDevedor] = useState(0);
   const [saldoContaInicial, setSaldoContaInicial] = useState(0);
+  const [diaFechamento, setDiaFechamento] = useState("");
   const [removing, setRemoving] = useState<{ id: string; nome: string } | null>(null);
   const [editing, setEditing] = useState<Bank | null>(null);
 
@@ -912,11 +913,12 @@ function BancosSection() {
       toast.error("Dê um nome para o banco.");
       return;
     }
-    await addBank(nome.trim(), saldoDevedor, saldoContaInicial);
+    await addBank(nome.trim(), saldoDevedor, saldoContaInicial, Number(diaFechamento) || undefined);
     toast.success("Banco criado.");
     setNome("");
     setSaldoDevedor(0);
     setSaldoContaInicial(0);
+    setDiaFechamento("");
   }
 
   return (
@@ -950,6 +952,15 @@ function BancosSection() {
             <Plus size={18} />
           </button>
         </div>
+        <input
+          type="number"
+          min="1"
+          max="31"
+          placeholder="Dia de fechamento da fatura (opcional)"
+          value={diaFechamento}
+          onChange={(event) => setDiaFechamento(event.target.value)}
+          className="rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+        />
       </form>
 
       {banks.length > 0 && (
@@ -1018,6 +1029,7 @@ function BancosSection() {
                       saldo anterior: {formatCurrency(b.saldoDevedor)}
                     </span>
                   )}
+                  {b.diaFechamento && <span>fecha dia {b.diaFechamento}</span>}
                 </div>
               </li>
             );
@@ -1072,7 +1084,12 @@ function EditBankSheet({
   banco: Bank | null;
   onSave: (
     id: string,
-    input: { nome: string; saldoDevedor: number; saldoContaInicial?: number },
+    input: {
+      nome: string;
+      saldoDevedor: number;
+      saldoContaInicial?: number;
+      diaFechamento?: number;
+    },
   ) => Promise<void>;
   onSetFaturaAjusteManual: (bancoId: string, delta: number) => Promise<void>;
   saldoContaAtual: number;
@@ -1107,7 +1124,12 @@ function EditBankFields({
   banco: Bank;
   onSave: (
     id: string,
-    input: { nome: string; saldoDevedor: number; saldoContaInicial?: number },
+    input: {
+      nome: string;
+      saldoDevedor: number;
+      saldoContaInicial?: number;
+      diaFechamento?: number;
+    },
   ) => Promise<void>;
   onSetFaturaAjusteManual: (bancoId: string, delta: number) => Promise<void>;
   saldoContaAtual: number;
@@ -1118,6 +1140,9 @@ function EditBankFields({
   const [saldoDevedor, setSaldoDevedor] = useState(banco.saldoDevedor);
   const [saldoConta, setSaldoConta] = useState(saldoContaAtual);
   const [faturaMes, setFaturaMes] = useState(faturaAjustadaAtual);
+  const [diaFechamento, setDiaFechamento] = useState(
+    banco.diaFechamento ? String(banco.diaFechamento) : "",
+  );
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -1133,6 +1158,7 @@ function EditBankFields({
         nome: nome.trim(),
         saldoDevedor,
         saldoContaInicial: novoSaldoContaInicial || undefined,
+        diaFechamento: Number(diaFechamento) || undefined,
       });
 
       const deltaFatura = faturaAjustadaAtual - faturaMes;
@@ -1187,6 +1213,21 @@ function EditBankFields({
         <p className="text-[11px] text-ink-muted">
           Os três campos acima são o que está de verdade hoje — o site ajusta as contas por trás
           pra bater com o que você informar, sem duplicar nada já rastreado.
+        </p>
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          Dia de fechamento da fatura (opcional)
+          <input
+            type="number"
+            min="1"
+            max="31"
+            value={diaFechamento}
+            onChange={(event) => setDiaFechamento(event.target.value)}
+            className="rounded-2xl border border-border px-4 py-3 text-sm text-ink outline-none transition-colors focus:border-accent"
+          />
+        </label>
+        <p className="text-[11px] text-ink-muted">
+          Compra no crédito depois desse dia entra na fatura do mês seguinte, não do mês corrente.
+          Isso vale automaticamente pra compras já lançadas, sem precisar mexer em nada.
         </p>
         <button
           onClick={handleSave}

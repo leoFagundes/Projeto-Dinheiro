@@ -16,6 +16,7 @@ import { useInvestmentMovements } from "@/lib/use-investment-movements";
 import { assignCategoryColors, mapCategoryIcons } from "@/lib/categories";
 import {
   computeMonthTotals,
+  computeOriginDateById,
   computeProjectedSubscriptionEntries,
   computeUnifiedHistory,
   type HistoryEntry,
@@ -91,6 +92,7 @@ export default function HistoricoPage() {
   const colorByCategoria = assignCategoryColors(categories);
   const iconByCategoria = mapCategoryIcons(categories);
   const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
+  const originDateById = computeOriginDateById(transactions);
 
   const unified = computeUnifiedHistory({
     transactions,
@@ -299,6 +301,7 @@ export default function HistoricoPage() {
                         colorByCategoria={colorByCategoria}
                         iconByCategoria={iconByCategoria}
                         bankNameById={bankNameById}
+                        originDateById={originDateById}
                       />
                     ) : (
                       <HistoryEntryRow key={entry.id} entry={entry} />

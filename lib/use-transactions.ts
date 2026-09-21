@@ -171,7 +171,10 @@ export function useTransactions() {
     );
 
     for (const template of templates) {
-      if (monthKeyOfIsoDate(template.data) === thisMonth) continue;
+      // >= (não só ===): se a assinatura começa num mês futuro, ainda não
+      // existe cobrança pra gerar agora — sem isso, o dia do template era
+      // "clampado" pro mês atual e criava uma instância antes da hora.
+      if (monthKeyOfIsoDate(template.data) >= thisMonth) continue;
       if (template.recorrenteFim && thisMonth > template.recorrenteFim) continue;
       if (template.recorrenciaIntervalo === "anual") {
         const anniversaryMonthNum = monthKeyOfIsoDate(template.data).slice(5, 7);

@@ -66,6 +66,12 @@ export type Bank = {
   saldoDevedor: number;
   /** Ajuste manual do saldo em conta — base sobre a qual receitas/débitos/caixinhas somam. */
   saldoContaInicial?: number;
+  /**
+   * Dia do mês (1-31) em que a fatura fecha. Compra no crédito depois desse
+   * dia entra na fatura do mês seguinte. Sem isso definido, a fatura agrupa
+   * por mês corrido (comportamento antigo).
+   */
+  diaFechamento?: number;
   /** Oculta o banco das seções de resumo do Dashboard sem deixar de contar no patrimônio. */
   oculto?: boolean;
   criadoEm: number;

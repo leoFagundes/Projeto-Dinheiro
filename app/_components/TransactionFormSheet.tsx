@@ -51,6 +51,11 @@ function TransactionFormFields({
 
   const isEditing = transaction !== undefined;
   const isRecurringChild = isEditing && Boolean(transaction?.recorrenteOrigemId);
+  // O próprio template de uma assinatura (não uma instância gerada dele) —
+  // editar valor/categoria/banco aqui também muda as próximas cobranças
+  // ainda não geradas, já que elas copiam esses campos do template na hora
+  // de gerar. Sem avisar isso, parecia um ajuste só daquele mês.
+  const isRecurringTemplate = isEditing && Boolean(transaction?.recorrente) && !isRecurringChild;
 
   const [tipo, setTipo] = useState<TransactionType>(transaction?.tipo ?? "despesa");
   const [valor, setValor] = useState(transaction?.valor ?? 0);
@@ -447,6 +452,15 @@ function TransactionFormFields({
               </>
             )}
           </div>
+        )}
+
+        {isRecurringTemplate && (
+          <p className="rounded-2xl bg-bg px-4 py-3 text-xs text-ink-muted">
+            Isso é o início de uma assinatura — mudar valor, categoria ou banco aqui também muda
+            as próximas cobranças ainda não geradas (elas copiam esses dados na hora de gerar). Se
+            quiser corrigir só este mês sem afetar os próximos, use &ldquo;Ajustar&rdquo; na aba
+            Assinaturas em Configurações.
+          </p>
         )}
 
         <button

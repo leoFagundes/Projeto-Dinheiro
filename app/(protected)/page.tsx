@@ -19,6 +19,7 @@ import {
   computeBankSaldoConta,
   computeMonthlyFlowTrend,
   computeMonthTotals,
+  computeOriginDateById,
   computePatrimonio,
   computeProjectedMonthBalance,
   computeUpcomingEvents,
@@ -124,6 +125,7 @@ export default function DashboardPage() {
   const goalsValidos = goals.filter((g) => categoriaNomes.has(g.categoria));
   const goalOverridesValidos = goalOverrides.filter((o) => categoriaNomes.has(o.categoria));
   const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
+  const originDateById = computeOriginDateById(transactions);
   const visibleBanks = banks.filter((b) => !b.oculto);
   const visiblePockets = pockets.filter((p) => !p.oculto);
   const visibleInvestments = investments.filter((inv) => !inv.oculto);
@@ -174,6 +176,10 @@ export default function DashboardPage() {
             saldoContaPorBanco={saldoContaPorBanco}
             onPayFatura={payFatura}
             onTransfer={transferBetweenBanks}
+            onDeleteTransaction={deleteTransaction}
+            colorByCategoria={colorByCategoria}
+            iconByCategoria={iconByCategoria}
+            bankNameById={bankNameById}
           />
         </section>
 
@@ -190,6 +196,7 @@ export default function DashboardPage() {
             colorByCategoria={colorByCategoria}
             iconByCategoria={iconByCategoria}
             bankNameById={bankNameById}
+            originDateById={originDateById}
           />
         </section>
 

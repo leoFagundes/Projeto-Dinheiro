@@ -44,13 +44,19 @@ export function useBanks() {
   }, [user]);
 
   const addBank = useCallback(
-    async (nome: string, saldoDevedorInicial = 0, saldoContaInicial = 0) => {
+    async (
+      nome: string,
+      saldoDevedorInicial = 0,
+      saldoContaInicial = 0,
+      diaFechamento?: number,
+    ) => {
       if (!user) return;
       await addDoc(collection(db, COLLECTION), {
         userId: user.uid,
         nome,
         saldoDevedor: saldoDevedorInicial,
         ...(saldoContaInicial ? { saldoContaInicial } : {}),
+        ...(diaFechamento ? { diaFechamento } : {}),
         criadoEm: Date.now(),
       });
     },
@@ -64,12 +70,18 @@ export function useBanks() {
   const updateBank = useCallback(
     async (
       id: string,
-      input: { nome: string; saldoDevedor: number; saldoContaInicial?: number },
+      input: {
+        nome: string;
+        saldoDevedor: number;
+        saldoContaInicial?: number;
+        diaFechamento?: number;
+      },
     ) => {
       await updateDoc(doc(db, COLLECTION, id), {
         nome: input.nome,
         saldoDevedor: input.saldoDevedor,
         saldoContaInicial: input.saldoContaInicial ? input.saldoContaInicial : deleteField(),
+        diaFechamento: input.diaFechamento ? input.diaFechamento : deleteField(),
       });
     },
     [],

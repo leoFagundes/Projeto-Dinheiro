@@ -35,6 +35,17 @@ export type CalendarEvent = {
 };
 
 /**
+ * Data do template original de cada assinatura, indexada pelo id do
+ * template — pra transações que são instâncias geradas (`recorrenteOrigemId`)
+ * mostrarem "desde quando" a assinatura existe, e não só "é recorrente".
+ */
+export function computeOriginDateById(transactions: Transaction[]): Map<string, string> {
+  return new Map(
+    transactions.filter((t) => t.recorrente && !t.recorrenteOrigemId).map((t) => [t.id, t.data]),
+  );
+}
+
+/**
  * Assinaturas/recorrências ativas: templates que ainda estão gerando (ou vão
  * gerar) transação todo mês — exclui instâncias já geradas (só o template
  * conta) e templates cuja recorrência já passou da data-fim definida.
@@ -100,11 +111,14 @@ export function computeNextChargeDate(
           (t) => t.recorrenteOrigemId === template.id && monthKeyOfIsoDate(t.data) === monthKey,
         );
 
+  const templateMonth = monthKeyOfIsoDate(template.data);
+
   if (template.recorrenciaIntervalo === "anual") {
-    const anniversaryMonthNum = monthKeyOfIsoDate(template.data).slice(5, 7);
+    const anniversaryMonthNum = templateMonth.slice(5, 7);
     const thisYear = Number(thisMonth.slice(0, 4));
     for (const year of [thisYear, thisYear + 1]) {
       const cycleMonth = `${year}-${anniversaryMonthNum}`;
+      if (cycleMonth < templateMonth) continue; // recorrência ainda não começou
       if (template.recorrenteFim && cycleMonth > template.recorrenteFim) return null;
       const cycleDate =
         instanceOn(cycleMonth)?.data ?? `${cycleMonth}-${clampDayToMonth(cycleMonth, originalDay)}`;
@@ -114,6 +128,7 @@ export function computeNextChargeDate(
   }
 
   for (const cycleMonth of [thisMonth, addMonthsToKey(thisMonth, 1)]) {
+    if (cycleMonth < templateMonth) continue; // recorrência ainda não começou
     if (template.recorrenteFim && cycleMonth > template.recorrenteFim) return null;
     const cycleDate =
       instanceOn(cycleMonth)?.data ?? `${cycleMonth}-${clampDayToMonth(cycleMonth, originalDay)}`;
@@ -184,7 +199,40 @@ export function computeFormaPagamentoBreakdown(
 }
 
 /**
- * Total de despesas no crédito vinculadas a cada banco no mês (fatura).
+ * Mês (yyyy-MM) da fatura em que uma compra cai, considerando o dia de
+ * fechamento do banco: depois do fechamento, a compra vira fatura do mês
+ * seguinte. Sem `diaFechamento` definido, cai no mês corrido da compra
+ * (comportamento antigo, mantido pra banco que não configurou isso ainda).
+ */
+export function computeFaturaMonthKey(dataIso: string, diaFechamento: number | undefined): string {
+  const monthKey = monthKeyOfIsoDate(dataIso);
+  if (!diaFechamento) return monthKey;
+  const dia = Number(dataIso.slice(8, 10));
+  return dia > diaFechamento ? addMonthsToKey(monthKey, 1) : monthKey;
+}
+
+/**
+ * Se uma despesa entra na fatura de um banco num mês: precisa ser no
+ * crédito, cair no mês certo (considerando o dia de fechamento — ver
+ * computeFaturaMonthKey) e, se `monthKey` for o mês atual, já ter
+ * "acontecido" de verdade (data <= hoje) — uma assinatura gerada no dia 1
+ * mas que só cobra no dia 20 não conta antes do dia 20 chegar. Meses
+ * passados (histórico) e futuros (prévia) não têm esse corte.
+ */
+function isTransactionInFatura(
+  t: Transaction,
+  bank: Bank | undefined,
+  monthKey: string,
+  isMesAtual: boolean,
+  hoje: string,
+): boolean {
+  if (t.tipo !== "despesa" || !t.bancoId || t.formaPagamento === "debito") return false;
+  if (isMesAtual && t.data > hoje) return false;
+  return computeFaturaMonthKey(t.data, bank?.diaFechamento) === monthKey;
+}
+
+/**
+ * Total de despesas no crédito vinculadas a cada banco na fatura do mês.
  * Débito é pagamento imediato e não entra na fatura.
  */
 export function computeBankBreakdown(
@@ -192,14 +240,12 @@ export function computeBankBreakdown(
   monthKey: string,
   banks: Bank[],
 ): { bancoId: string; nome: string; total: number }[] {
+  const bankById = new Map(banks.map((b) => [b.id, b]));
+  const isMesAtual = monthKey === currentMonthKey();
+  const hoje = todayIsoDate();
   const totals = new Map<string, number>();
   for (const t of transactions) {
-    if (
-      t.tipo !== "despesa" ||
-      !t.bancoId ||
-      t.formaPagamento === "debito" ||
-      monthKeyOfIsoDate(t.data) !== monthKey
-    ) {
+    if (!t.bancoId || !isTransactionInFatura(t, bankById.get(t.bancoId), monthKey, isMesAtual, hoje)) {
       continue;
     }
     totals.set(t.bancoId, (totals.get(t.bancoId) ?? 0) + t.valor);
@@ -210,6 +256,25 @@ export function computeBankBreakdown(
     nome: bankNameById.get(bancoId) ?? "Banco removido",
     total,
   })).sort((a, b) => b.total - a.total);
+}
+
+/**
+ * As transações que compõem a fatura de UM banco num mês — os itens de
+ * verdade por trás do total de computeBankBreakdown, pra mostrar/editar um
+ * por um (ex: num modal de detalhe da fatura).
+ */
+export function computeBankFaturaTransactions(
+  transactions: Transaction[],
+  bancoId: string,
+  monthKey: string,
+  banks: Bank[],
+): Transaction[] {
+  const bank = banks.find((b) => b.id === bancoId);
+  const isMesAtual = monthKey === currentMonthKey();
+  const hoje = todayIsoDate();
+  return transactions
+    .filter((t) => t.bancoId === bancoId && isTransactionInFatura(t, bank, monthKey, isMesAtual, hoje))
+    .sort((a, b) => (a.data < b.data ? 1 : a.data > b.data ? -1 : 0));
 }
 
 /**
@@ -241,6 +306,9 @@ export function computeBankFaturaAjustada(
  * conta na hora), depósitos em caixinhas, aportes em investimentos, pagamentos
  * de fatura e transferências enviadas a outro banco.
  * Despesas no crédito não entram aqui — elas compõem a fatura, cobrada depois.
+ * Receita/despesa no débito com data futura ainda não "aconteceu" — uma
+ * assinatura no débito gerada logo no início do mês (mas que só cobra no dia
+ * 20, por exemplo) não pode tirar o dinheiro da conta antes do dia chegar.
  */
 export function computeBankSaldoConta(
   bank: Bank,
@@ -250,9 +318,11 @@ export function computeBankSaldoConta(
   investmentMovements: InvestmentMovement[] = [],
   transfers: BankTransfer[] = [],
 ): number {
+  const hoje = todayIsoDate();
   let saldo = bank.saldoContaInicial ?? 0;
   for (const t of transactions) {
     if (t.bancoId !== bank.id) continue;
+    if (t.data > hoje) continue;
     if (t.tipo === "receita") saldo += t.valor;
     else if (t.formaPagamento === "debito") saldo -= t.valor;
   }

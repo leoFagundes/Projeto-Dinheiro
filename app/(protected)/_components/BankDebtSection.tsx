@@ -8,8 +8,13 @@ import { EmptyState } from "@/app/_components/EmptyState";
 import { BottomSheet } from "@/app/_components/BottomSheet";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import { MonthFilter } from "@/app/_components/MonthFilter";
-import { computeBankFaturaAjustada } from "@/lib/derived";
-import { addMonthsToKey, currentMonthKey, formatCurrency, todayIsoDate } from "@/lib/format";
+import { TransactionListItem } from "@/app/_components/TransactionListItem";
+import {
+  computeBankFaturaAjustada,
+  computeBankFaturaTransactions,
+  computeOriginDateById,
+} from "@/lib/derived";
+import { addMonthsToKey, currentMonthKey, formatCurrency, formatMonthLabel, todayIsoDate } from "@/lib/format";
 import type { Bank, BankPayment, Transaction } from "@/lib/types";
 
 export function BankDebtSection({
@@ -20,6 +25,10 @@ export function BankDebtSection({
   saldoContaPorBanco,
   onPayFatura,
   onTransfer,
+  onDeleteTransaction,
+  colorByCategoria,
+  iconByCategoria,
+  bankNameById,
 }: {
   /** Bancos visíveis (não ocultos) — só esses aparecem na lista. */
   banks: Bank[];
@@ -30,9 +39,14 @@ export function BankDebtSection({
   saldoContaPorBanco: Map<string, number>;
   onPayFatura: (id: string, valor: number, data?: string) => Promise<void>;
   onTransfer: (fromBancoId: string, toBancoId: string, valor: number, data?: string) => Promise<void>;
+  onDeleteTransaction: (id: string) => Promise<void>;
+  colorByCategoria: Map<string, string>;
+  iconByCategoria: Map<string, string>;
+  bankNameById: Map<string, string>;
 }) {
   const [paying, setPaying] = useState<Bank | null>(null);
   const [transferring, setTransferring] = useState(false);
+  const [faturaDetalhe, setFaturaDetalhe] = useState<Bank | null>(null);
   const [monthKey, setMonthKey] = useState(currentMonthKey());
   const mesAtual = monthKey === currentMonthKey();
   const mesAnterior = addMonthsToKey(currentMonthKey(), -1);
@@ -86,14 +100,17 @@ export function BankDebtSection({
                     )}
                   </span>
                 </span>
-                <span className="shrink-0 text-right">
-                  <span className="block text-sm font-medium text-negative">
+                <button
+                  onClick={() => setFaturaDetalhe(banco)}
+                  className="shrink-0 text-right transition-transform active:scale-95"
+                >
+                  <span className="block text-sm font-medium text-negative underline decoration-dotted underline-offset-2">
                     {formatCurrency(fatura)}
                   </span>
                   <span className="block text-[11px] text-ink-muted">
                     fatura {mesAtual ? "deste mês" : "do mês"}
                   </span>
-                </span>
+                </button>
               </div>
 
               {faturaMesAnteriorNaoPaga > 0 && (
@@ -156,7 +173,97 @@ export function BankDebtSection({
         onTransfer={onTransfer}
         onClose={() => setTransferring(false)}
       />
+
+      <FaturaDetalheSheet
+        banco={faturaDetalhe}
+        monthKey={monthKey}
+        transactions={transactions}
+        allBanks={allBanks}
+        bankPayments={bankPayments}
+        onDeleteTransaction={onDeleteTransaction}
+        colorByCategoria={colorByCategoria}
+        iconByCategoria={iconByCategoria}
+        bankNameById={bankNameById}
+        onClose={() => setFaturaDetalhe(null)}
+      />
     </div>
+  );
+}
+
+function FaturaDetalheSheet({
+  banco,
+  monthKey,
+  transactions,
+  allBanks,
+  bankPayments,
+  onDeleteTransaction,
+  colorByCategoria,
+  iconByCategoria,
+  bankNameById,
+  onClose,
+}: {
+  banco: Bank | null;
+  monthKey: string;
+  transactions: Transaction[];
+  allBanks: Bank[];
+  bankPayments: BankPayment[];
+  onDeleteTransaction: (id: string) => Promise<void>;
+  colorByCategoria: Map<string, string>;
+  iconByCategoria: Map<string, string>;
+  bankNameById: Map<string, string>;
+  onClose: () => void;
+}) {
+  const itens = banco ? computeBankFaturaTransactions(transactions, banco.id, monthKey, allBanks) : [];
+  const originDateById = computeOriginDateById(transactions);
+  const totalLancado = itens.reduce((sum, t) => sum + t.valor, 0);
+  const faturaRestante = banco
+    ? computeBankFaturaAjustada(banco.id, transactions, monthKey, allBanks, bankPayments)
+    : 0;
+  const jaPago = Math.max(0, totalLancado - faturaRestante);
+
+  return (
+    <BottomSheet open={banco !== null} onClose={onClose}>
+      {banco && (
+        <>
+          <p className="mb-1 font-medium">
+            Fatura de {banco.nome} — {formatMonthLabel(monthKey)}
+          </p>
+          <p className="mb-4 text-xs text-ink-muted">
+            Toque num item pra editar ou excluir. Mudanças aqui recalculam a fatura na hora.
+          </p>
+
+          {jaPago > 0 && (
+            <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-bg px-4 py-3 text-xs text-ink-muted">
+              <span>Lançado: {formatCurrency(totalLancado)}</span>
+              <span className="text-accent-strong">Pago: {formatCurrency(jaPago)}</span>
+              <span className={faturaRestante > 0 ? "text-negative" : "text-accent-strong"}>
+                Falta: {formatCurrency(faturaRestante)}
+              </span>
+            </div>
+          )}
+
+          {itens.length === 0 ? (
+            <p className="rounded-2xl bg-bg px-4 py-6 text-center text-sm text-ink-muted">
+              Nenhum item nessa fatura ainda.
+            </p>
+          ) : (
+            <div className="-mx-1 flex max-h-[60vh] flex-col gap-2 overflow-y-auto px-1">
+              {itens.map((transaction) => (
+                <TransactionListItem
+                  key={transaction.id}
+                  transaction={transaction}
+                  onDelete={onDeleteTransaction}
+                  colorByCategoria={colorByCategoria}
+                  iconByCategoria={iconByCategoria}
+                  bankNameById={bankNameById}
+                  originDateById={originDateById}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </BottomSheet>
   );
 }
 

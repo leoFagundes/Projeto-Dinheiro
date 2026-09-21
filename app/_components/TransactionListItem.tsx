@@ -17,12 +17,20 @@ export function TransactionListItem({
   colorByCategoria,
   iconByCategoria,
   bankNameById,
+  originDateById,
 }: {
   transaction: Transaction;
   onDelete: (id: string) => Promise<void>;
   colorByCategoria: Map<string, string>;
   iconByCategoria: Map<string, string>;
   bankNameById: Map<string, string>;
+  /**
+   * Data (yyyy-MM-dd) do template original, indexada pelo id do template —
+   * só usada quando essa transação é uma instância gerada dele
+   * (`recorrenteOrigemId`), pra deixar claro "desde quando" a assinatura
+   * existe em vez de só dizer "recorrente".
+   */
+  originDateById?: Map<string, string>;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -33,6 +41,10 @@ export function TransactionListItem({
   const categoriaColor = colorByCategoria.get(categoriaKey) ?? FALLBACK_CATEGORY_COLOR;
   const categoriaIcon = iconByCategoria.get(categoriaKey) ?? FALLBACK_CATEGORY_ICON;
   const bancoNome = transaction.bancoId ? bankNameById.get(transaction.bancoId) : undefined;
+  const isRecorrenteOriginal = transaction.recorrente && !transaction.recorrenteOrigemId;
+  const origemData = transaction.recorrenteOrigemId
+    ? originDateById?.get(transaction.recorrenteOrigemId)
+    : undefined;
 
   async function handleConfirmDelete() {
     setDeleting(true);
@@ -72,7 +84,10 @@ export function TransactionListItem({
               <p className="truncate text-sm font-medium">{transaction.descricao}</p>
               <p className="flex flex-wrap items-center gap-1 text-xs text-ink-muted">
                 {transaction.categoria} · {formatDate(transaction.data)}
-                {transaction.recorrente ? " · recorrente" : ""}
+                {isRecorrenteOriginal ? " · assinatura (original)" : ""}
+                {transaction.recorrenteOrigemId
+                  ? ` · assinatura${origemData ? ` desde ${formatDate(origemData)}` : ""}`
+                  : ""}
                 {transaction.parcelaTotal
                   ? ` · parcela ${transaction.parcelaAtual}/${transaction.parcelaTotal}`
                   : ""}
