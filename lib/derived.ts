@@ -34,6 +34,94 @@ export type CalendarEvent = {
   recorrente: boolean;
 };
 
+/**
+ * Assinaturas/recorrências ativas: templates que ainda estão gerando (ou vão
+ * gerar) transação todo mês — exclui instâncias já geradas (só o template
+ * conta) e templates cuja recorrência já passou da data-fim definida.
+ * Ordenado do maior pro menor valor.
+ */
+export function computeActiveSubscriptions(transactions: Transaction[]): Transaction[] {
+  const thisMonth = currentMonthKey();
+  return transactions
+    .filter(
+      (t) =>
+        t.recorrente &&
+        !t.recorrenteOrigemId &&
+        (!t.recorrenteFim || t.recorrenteFim >= thisMonth),
+    )
+    .sort((a, b) => b.valor - a.valor);
+}
+
+/**
+ * Assinaturas paradas recentemente: já foram um template ativo (têm pelo
+ * menos uma instância gerada), mas hoje `recorrente` está false. Sem esse
+ * "já teve instância" como pista, não daria pra distinguir de uma transação
+ * comum que nunca foi recorrente.
+ */
+export function computeStoppedSubscriptions(transactions: Transaction[]): Transaction[] {
+  return transactions
+    .filter(
+      (t) =>
+        !t.recorrente &&
+        !t.recorrenteOrigemId &&
+        transactions.some((other) => other.recorrenteOrigemId === t.id),
+    )
+    .sort((a, b) => b.criadoEm - a.criadoEm);
+}
+
+/** Quanto já foi cobrado no total de uma assinatura (a primeira cobrança + todas as instâncias geradas dela). */
+export function computeSubscriptionTotalSpent(
+  template: Transaction,
+  transactions: Transaction[],
+): number {
+  return transactions
+    .filter((t) => t.id === template.id || t.recorrenteOrigemId === template.id)
+    .reduce((sum, t) => sum + t.valor, 0);
+}
+
+/**
+ * Próxima data em que essa assinatura deve cobrar, considerando a
+ * frequência (mensal ou anual) e respeitando `recorrenteFim`. Retorna null
+ * se a recorrência já tiver terminado.
+ */
+export function computeNextChargeDate(
+  template: Transaction,
+  transactions: Transaction[],
+): string | null {
+  const today = todayIsoDate();
+  const thisMonth = currentMonthKey();
+  if (template.recorrenteFim && thisMonth > template.recorrenteFim) return null;
+
+  const originalDay = Number(template.data.slice(8, 10));
+  const instanceOn = (monthKey: string) =>
+    monthKeyOfIsoDate(template.data) === monthKey
+      ? template
+      : transactions.find(
+          (t) => t.recorrenteOrigemId === template.id && monthKeyOfIsoDate(t.data) === monthKey,
+        );
+
+  if (template.recorrenciaIntervalo === "anual") {
+    const anniversaryMonthNum = monthKeyOfIsoDate(template.data).slice(5, 7);
+    const thisYear = Number(thisMonth.slice(0, 4));
+    for (const year of [thisYear, thisYear + 1]) {
+      const cycleMonth = `${year}-${anniversaryMonthNum}`;
+      if (template.recorrenteFim && cycleMonth > template.recorrenteFim) return null;
+      const cycleDate =
+        instanceOn(cycleMonth)?.data ?? `${cycleMonth}-${clampDayToMonth(cycleMonth, originalDay)}`;
+      if (cycleDate >= today) return cycleDate;
+    }
+    return null;
+  }
+
+  for (const cycleMonth of [thisMonth, addMonthsToKey(thisMonth, 1)]) {
+    if (template.recorrenteFim && cycleMonth > template.recorrenteFim) return null;
+    const cycleDate =
+      instanceOn(cycleMonth)?.data ?? `${cycleMonth}-${clampDayToMonth(cycleMonth, originalDay)}`;
+    if (cycleDate >= today) return cycleDate;
+  }
+  return null;
+}
+
 export function computeMonthTotals(transactions: Transaction[], monthKey: string) {
   const monthTx = transactions.filter((t) => monthKeyOfIsoDate(t.data) === monthKey);
   const receitas = monthTx
@@ -309,6 +397,9 @@ export function computeMonthEvents(
     if (templateMonth === monthKey) continue; // já contado acima como transação real
     if (monthKey < templateMonth) continue; // recorrência ainda não começou
     if (template.recorrenteFim && monthKey > template.recorrenteFim) continue;
+    if (template.recorrenciaIntervalo === "anual" && monthKey.slice(5, 7) !== templateMonth.slice(5, 7)) {
+      continue;
+    }
 
     const jaExiste = transactions.some(
       (t) => t.recorrenteOrigemId === template.id && monthKeyOfIsoDate(t.data) === monthKey,
@@ -537,6 +628,54 @@ export type HistoryEntry = {
    */
   onDelete?: () => Promise<void>;
 };
+
+/**
+ * Cobranças de assinaturas que ainda não existem no Firestore (o mês
+ * navegado ainda não chegou/não foi aberto pelo app pra gerar de verdade),
+ * mas que vão acontecer — pra não sumir do Histórico quando o usuário avança
+ * pros próximos meses. Só entra o que ainda não tem instância real gerada.
+ */
+export function computeProjectedSubscriptionEntries(
+  transactions: Transaction[],
+  monthKey: string,
+): HistoryEntry[] {
+  const templates = transactions.filter((t) => t.recorrente && !t.recorrenteOrigemId);
+  const entries: HistoryEntry[] = [];
+
+  for (const template of templates) {
+    const templateMonth = monthKeyOfIsoDate(template.data);
+    if (templateMonth === monthKey) continue; // já é uma transação real
+    if (monthKey < templateMonth) continue;
+    if (template.recorrenteFim && monthKey > template.recorrenteFim) continue;
+    if (
+      template.recorrenciaIntervalo === "anual" &&
+      monthKey.slice(5, 7) !== templateMonth.slice(5, 7)
+    ) {
+      continue;
+    }
+
+    const jaExiste = transactions.some(
+      (t) => t.recorrenteOrigemId === template.id && monthKeyOfIsoDate(t.data) === monthKey,
+    );
+    if (jaExiste) continue;
+
+    const day = clampDayToMonth(monthKey, Number(template.data.slice(8, 10)));
+    entries.push({
+      id: `previsto-${template.id}-${monthKey}`,
+      data: `${monthKey}-${day}`,
+      criadoEm: 0,
+      tipo: template.tipo,
+      titulo: template.descricao,
+      detalhe: "previsto",
+      valor: template.valor,
+      direcao: template.tipo === "receita" ? "positivo" : "negativo",
+      categoria: template.categoria,
+      formaPagamento: template.formaPagamento,
+    });
+  }
+
+  return entries;
+}
 
 export function computeUnifiedHistory(params: {
   transactions: Transaction[];

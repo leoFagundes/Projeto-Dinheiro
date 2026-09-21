@@ -17,17 +17,18 @@ import { useAuth } from "./auth-context";
 import type { FormaPagamento, NewTransaction, Transaction } from "./types";
 
 /**
- * Igual a Partial<NewTransaction>, exceto pelos três campos opcionais que
+ * Igual a Partial<NewTransaction>, exceto pelos campos opcionais que
  * precisam de um jeito explícito de dizer "limpa esse campo" — passar
  * string vazia (ou "" tipada) remove o campo no Firestore em vez de deixar
  * o valor antigo esquecido lá (updateDoc faz merge, não substitui).
  */
 type TransactionUpdateInput = Partial<
-  Omit<NewTransaction, "bancoId" | "formaPagamento" | "recorrenteFim">
+  Omit<NewTransaction, "bancoId" | "formaPagamento" | "recorrenteFim" | "recorrenciaIntervalo">
 > & {
   bancoId?: string;
   formaPagamento?: FormaPagamento | "";
   recorrenteFim?: string;
+  recorrenciaIntervalo?: "mensal" | "anual" | "";
 };
 import {
   addMonthsToKey,
@@ -128,7 +129,7 @@ export function useTransactions() {
   );
 
   const updateTransaction = useCallback(async (id: string, input: TransactionUpdateInput) => {
-    const { bancoId, formaPagamento, recorrenteFim, ...rest } = input;
+    const { bancoId, formaPagamento, recorrenteFim, recorrenciaIntervalo, ...rest } = input;
     const payload: Record<string, unknown> = { ...rest };
     if (bancoId !== undefined) payload.bancoId = bancoId ? bancoId : deleteField();
     if (formaPagamento !== undefined) {
@@ -136,6 +137,9 @@ export function useTransactions() {
     }
     if (recorrenteFim !== undefined) {
       payload.recorrenteFim = recorrenteFim ? recorrenteFim : deleteField();
+    }
+    if (recorrenciaIntervalo !== undefined) {
+      payload.recorrenciaIntervalo = recorrenciaIntervalo === "anual" ? "anual" : deleteField();
     }
     await updateDoc(doc(db, COLLECTION, id), payload);
   }, []);
@@ -169,6 +173,10 @@ export function useTransactions() {
     for (const template of templates) {
       if (monthKeyOfIsoDate(template.data) === thisMonth) continue;
       if (template.recorrenteFim && thisMonth > template.recorrenteFim) continue;
+      if (template.recorrenciaIntervalo === "anual") {
+        const anniversaryMonthNum = monthKeyOfIsoDate(template.data).slice(5, 7);
+        if (thisMonth.slice(5, 7) !== anniversaryMonthNum) continue;
+      }
 
       const alreadyExists = transactions.some(
         (t) =>

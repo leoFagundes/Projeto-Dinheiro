@@ -7,6 +7,7 @@ import {
   ArrowLeftRight,
   PiggyBank,
   Receipt,
+  Repeat,
   SlidersHorizontal,
   Trash2,
   TrendingUp,
@@ -22,6 +23,10 @@ const ICON_BY_TIPO = {
   ajuste_fatura: SlidersHorizontal,
   caixinha: PiggyBank,
   investimento: TrendingUp,
+  // Só chega aqui uma receita/despesa sem `onDelete`/transaction real: uma
+  // cobrança de assinatura prevista pra um mês futuro ainda não gerado.
+  receita: Repeat,
+  despesa: Repeat,
 } as const;
 
 /** Linha pras movimentações que não são transações — só dá pra excluir (desfaz o efeito nos saldos), não editar. */

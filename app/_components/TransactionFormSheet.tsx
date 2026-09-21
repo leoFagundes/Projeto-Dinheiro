@@ -63,6 +63,9 @@ function TransactionFormFields({
   const [data, setData] = useState(transaction?.data ?? todayIsoDate());
   const [recorrente, setRecorrente] = useState(transaction?.recorrente ?? false);
   const [recorrenteFim, setRecorrenteFim] = useState(transaction?.recorrenteFim ?? "");
+  const [recorrenciaIntervalo, setRecorrenciaIntervalo] = useState<"mensal" | "anual">(
+    transaction?.recorrenciaIntervalo ?? "mensal",
+  );
   const [parcelar, setParcelar] = useState(false);
   const [numParcelas, setNumParcelas] = useState("2");
   const [parcelaInicial, setParcelaInicial] = useState("1");
@@ -106,6 +109,7 @@ function TransactionFormFields({
     setData(todayIsoDate());
     setRecorrente(false);
     setRecorrenteFim("");
+    setRecorrenciaIntervalo("mensal");
     setParcelar(false);
     setNumParcelas("2");
     setParcelaInicial("1");
@@ -138,6 +142,7 @@ function TransactionFormFields({
           data,
           recorrente,
           recorrenteFim: recorrente ? recorrenteFim : "",
+          recorrenciaIntervalo: recorrente ? recorrenciaIntervalo : "",
           bancoId,
           formaPagamento: tipo === "despesa" ? formaPagamento : "",
         });
@@ -158,6 +163,7 @@ function TransactionFormFields({
           data,
           recorrente,
           ...(recorrente && recorrenteFim ? { recorrenteFim } : {}),
+          ...(recorrente && recorrenciaIntervalo === "anual" ? { recorrenciaIntervalo } : {}),
           ...(bancoId ? (tipo === "despesa" ? { bancoId, formaPagamento } : { bancoId }) : {}),
         });
         toast.success("Transação adicionada.");
@@ -401,18 +407,44 @@ function TransactionFormFields({
                 onChange={(event) => setRecorrente(event.target.checked)}
                 className="size-4 accent-accent"
               />
-              Repetir todo mês
+              Repetir
             </label>
             {recorrente && (
-              <label className="flex items-center gap-2 text-xs text-ink-muted">
-                Repetir até (opcional)
-                <input
-                  type="month"
-                  value={recorrenteFim}
-                  onChange={(event) => setRecorrenteFim(event.target.value)}
-                  className="rounded-xl border border-border px-2 py-1.5 text-sm outline-none transition-colors focus:border-accent"
-                />
-              </label>
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRecorrenciaIntervalo("mensal")}
+                    className={`rounded-2xl border px-3 py-2 text-xs font-medium transition-colors ${
+                      recorrenciaIntervalo === "mensal"
+                        ? "border-accent bg-accent-soft text-accent-strong"
+                        : "border-border text-ink-muted"
+                    }`}
+                  >
+                    Mensal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRecorrenciaIntervalo("anual")}
+                    className={`rounded-2xl border px-3 py-2 text-xs font-medium transition-colors ${
+                      recorrenciaIntervalo === "anual"
+                        ? "border-accent bg-accent-soft text-accent-strong"
+                        : "border-border text-ink-muted"
+                    }`}
+                  >
+                    Anual
+                  </button>
+                </div>
+                <label className="flex items-center gap-2 text-xs text-ink-muted">
+                  Repetir até (opcional)
+                  <input
+                    type="month"
+                    value={recorrenteFim}
+                    onChange={(event) => setRecorrenteFim(event.target.value)}
+                    className="rounded-xl border border-border px-2 py-1.5 text-sm outline-none transition-colors focus:border-accent"
+                  />
+                </label>
+              </>
             )}
           </div>
         )}

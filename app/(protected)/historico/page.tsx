@@ -14,7 +14,12 @@ import { usePocketTransfers } from "@/lib/use-pocket-transfers";
 import { useInvestments } from "@/lib/use-investments";
 import { useInvestmentMovements } from "@/lib/use-investment-movements";
 import { assignCategoryColors, mapCategoryIcons } from "@/lib/categories";
-import { computeMonthTotals, computeUnifiedHistory, type HistoryEntry } from "@/lib/derived";
+import {
+  computeMonthTotals,
+  computeProjectedSubscriptionEntries,
+  computeUnifiedHistory,
+  type HistoryEntry,
+} from "@/lib/derived";
 import { currentMonthKey, formatCurrency, monthKeyOfIsoDate } from "@/lib/format";
 import { downloadMonthlyReportCsv } from "@/lib/csv";
 import { MonthFilter } from "@/app/_components/MonthFilter";
@@ -108,17 +113,24 @@ export default function HistoricoPage() {
   const mostraFormaPagamento = tipoFiltro === "todos" || tipoFiltro === "despesa";
   const filtroAtivo = tipoFiltro !== "todos" || categoriaFiltro !== "" || formaPagamentoFiltro !== "";
 
-  const listaExibida = unified.filter((entry) => {
-    if (!buscando && monthKeyOfIsoDate(entry.data) !== monthKey) return false;
-    if (!matchesTipoFiltro(entry, tipoFiltro)) return false;
-    if (categoriaFiltro && entry.categoria !== categoriaFiltro) return false;
-    if (formaPagamentoFiltro && entry.formaPagamento !== formaPagamentoFiltro) return false;
-    if (buscando) {
-      const alvo = `${entry.titulo} ${entry.categoria ?? ""}`.toLowerCase();
-      if (!alvo.includes(termo)) return false;
-    }
-    return true;
-  });
+  // Meses futuros ainda não têm transação real gerada pras assinaturas —
+  // sem isso, avançar pros próximos meses no Histórico mostrava tudo vazio
+  // mesmo já sabendo que aquelas cobranças vão acontecer.
+  const previstas = buscando ? [] : computeProjectedSubscriptionEntries(transactions, monthKey);
+
+  const listaExibida = [...unified, ...previstas]
+    .filter((entry) => {
+      if (!buscando && monthKeyOfIsoDate(entry.data) !== monthKey) return false;
+      if (!matchesTipoFiltro(entry, tipoFiltro)) return false;
+      if (categoriaFiltro && entry.categoria !== categoriaFiltro) return false;
+      if (formaPagamentoFiltro && entry.formaPagamento !== formaPagamentoFiltro) return false;
+      if (buscando) {
+        const alvo = `${entry.titulo} ${entry.categoria ?? ""}`.toLowerCase();
+        if (!alvo.includes(termo)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => (a.data < b.data ? 1 : a.data > b.data ? -1 : b.criadoEm - a.criadoEm));
 
   return (
     <PageFade>

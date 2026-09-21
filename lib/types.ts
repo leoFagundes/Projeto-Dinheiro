@@ -16,6 +16,8 @@ export type Transaction = {
   recorrenteOrigemId?: string;
   /** Mês (yyyy-MM) em que a recorrência para de gerar novas instâncias, se definido */
   recorrenteFim?: string;
+  /** Frequência da recorrência. Ausente = "mensal" (padrão histórico). */
+  recorrenciaIntervalo?: "mensal" | "anual";
   /** Banco/instituição associada a esta despesa (opcional) */
   bancoId?: string;
   /** Crédito conta na fatura do banco; débito é pagamento imediato e não conta. Padrão: crédito. */
