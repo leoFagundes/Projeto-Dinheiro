@@ -97,7 +97,7 @@ function UserRow({ user }: { user: AdminUser }) {
   }
 
   return (
-    <li className="rounded-card bg-surface p-4">
+    <li className="rounded-card bg-surface shadow-card p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{user.email}</p>

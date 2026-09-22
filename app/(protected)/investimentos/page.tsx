@@ -65,7 +65,7 @@ export default function InvestimentosPage() {
       <div className="flex flex-col gap-6 pb-8">
         <h1 className="text-lg font-semibold">Investimentos</h1>
 
-        <div className="rounded-card bg-surface p-5">
+        <div className="rounded-card bg-surface shadow-card p-5">
           <p className="text-sm text-ink-muted">Valor atual</p>
           <p className="mt-1 text-3xl font-semibold">
             <Money value={valorAtual} />
@@ -92,7 +92,7 @@ export default function InvestimentosPage() {
 
         <section>
           <h2 className="mb-3 text-sm font-medium text-ink-muted">Composição da carteira</h2>
-          <div className="rounded-card bg-surface p-4">
+          <div className="rounded-card bg-surface shadow-card p-4">
             <BreakdownChart
               data={composicaoData}
               emptyTitle="Nenhum investimento com valor ainda"
@@ -119,7 +119,7 @@ export default function InvestimentosPage() {
 
         <section>
           <h2 className="mb-3 text-sm font-medium text-ink-muted">Aportes por mês em {ano}</h2>
-          <div className="rounded-card bg-surface p-4">
+          <div className="rounded-card bg-surface shadow-card p-4">
             <SingleSeriesBarChart
               data={aportesDoAno}
               label="Aportado"
@@ -132,7 +132,7 @@ export default function InvestimentosPage() {
 
         <section>
           <h2 className="mb-3 text-sm font-medium text-ink-muted">Evolução acumulada</h2>
-          <div className="rounded-card bg-surface p-4">
+          <div className="rounded-card bg-surface shadow-card p-4">
             <AreaTrendChart
               data={acumulado}
               label="Total aportado"
@@ -214,7 +214,7 @@ function MetasCarteira({
       </div>
 
       {adding && (
-        <div className="mb-2 flex flex-col gap-2 rounded-card bg-surface p-4">
+        <div className="mb-2 flex flex-col gap-2 rounded-card bg-surface shadow-card p-4">
           <input
             type="text"
             placeholder="Rótulo (opcional, ex: Reserva de emergência)"
@@ -241,7 +241,7 @@ function MetasCarteira({
       )}
 
       {goals.length === 0 ? (
-        <p className="rounded-card bg-surface p-4 text-xs text-ink-muted">
+        <p className="rounded-card bg-surface shadow-card p-4 text-xs text-ink-muted">
           Defina valores-alvo pra carteira toda — cada um vira um marco, marcado como concluído
           assim que você chegar lá.
         </p>
@@ -314,7 +314,7 @@ function AtivoFicha({
   const cotasFinal = ledger[ledger.length - 1]?.cotasAcumuladas ?? 0;
 
   return (
-    <li className="rounded-card bg-surface px-4 py-3">
+    <li className="rounded-card bg-surface shadow-card px-4 py-3">
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between gap-2 text-left text-sm"

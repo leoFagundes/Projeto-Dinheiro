@@ -23,7 +23,7 @@ export function SummaryCards({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-card bg-surface p-5">
+      <div className="rounded-card bg-surface shadow-card p-5">
         <p className="text-sm text-ink-muted">Patrimônio</p>
         <p className="mt-1 text-3xl font-semibold">
           <Money value={patrimonio.total} />
@@ -54,13 +54,13 @@ export function SummaryCards({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-card bg-surface p-4">
+        <div className="rounded-card bg-surface shadow-card p-4">
           <p className="text-xs text-ink-muted">Receitas do mês</p>
           <p className="mt-1 text-lg font-medium text-accent-strong">
             <MaskedCurrency value={receitasMes} />
           </p>
         </div>
-        <div className="rounded-card bg-surface p-4">
+        <div className="rounded-card bg-surface shadow-card p-4">
           <p className="text-xs text-ink-muted">Despesas do mês</p>
           <p className="mt-1 text-lg font-medium text-negative">
             <MaskedCurrency value={despesasMes} />
@@ -79,7 +79,7 @@ export function SummaryCards({
         </div>
       </div>
 
-      <div className="rounded-card bg-surface p-4">
+      <div className="rounded-card bg-surface shadow-card p-4">
         <p className="text-xs text-ink-muted">Saldo projetado do mês</p>
         <p
           className={`mt-1 text-lg font-medium ${saldoProjetadoMes < 0 ? "text-negative" : "text-accent-strong"}`}

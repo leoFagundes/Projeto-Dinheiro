@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { DayPicker, type DayButtonProps } from "react-day-picker";
 import { ptBR } from "react-day-picker/locale";
 import { CalendarClock, Repeat } from "lucide-react";
@@ -25,10 +26,12 @@ export default function CalendarioPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-4 pb-8">
-        <h1 className="text-lg font-semibold">Calendário</h1>
-        <Skeleton className="h-96" />
-      </div>
+      <PageFade>
+        <div className="flex flex-col gap-4 pb-8">
+          <h1 className="text-lg font-semibold">Calendário</h1>
+          <Skeleton className="h-96" />
+        </div>
+      </PageFade>
     );
   }
 
@@ -84,7 +87,7 @@ export default function CalendarioPage() {
           Calendário
         </h1>
 
-        <div className="rounded-card bg-surface p-4">
+        <div className="rounded-card bg-surface shadow-card p-4">
           {/* Largura travada e centralizada: sem isso, em telas mais largas o
               card ocupa a coluna inteira e as setas (inset-x-0) ficam bem
               longe da grade de dias, que continua com cara de calendário de
@@ -131,13 +134,23 @@ export default function CalendarioPage() {
           </span>
         </div>
 
-        {events.length === 0 && (
-          <EmptyState
-            icon={CalendarClock}
-            title="Nada previsto neste mês"
-            description="Assinaturas, salário e outras recorrências aparecem aqui automaticamente."
-          />
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          {events.length === 0 && (
+            <motion.div
+              key={`empty-${monthKey}`}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.15 }}
+            >
+              <EmptyState
+                icon={CalendarClock}
+                title="Nada previsto neste mês"
+                description="Assinaturas, salário e outras recorrências aparecem aqui automaticamente."
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <BottomSheet open={selectedDay !== undefined} onClose={() => setSelectedDay(undefined)}>
@@ -148,21 +161,31 @@ export default function CalendarioPage() {
             year: "numeric",
           })}
         </p>
-        {selectedEvents.length === 0 ? (
-          <p className="text-sm text-ink-muted">Nada previsto para este dia.</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {selectedEvents.map((event) => (
-              <EventRow
-                key={event.id}
-                event={event}
-                colorByCategoria={colorByCategoria}
-                iconByCategoria={iconByCategoria}
-                bankNameById={bankNameById}
-              />
-            ))}
-          </ul>
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={selectedIso ?? "none"}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.15 }}
+          >
+            {selectedEvents.length === 0 ? (
+              <p className="text-sm text-ink-muted">Nada previsto para este dia.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {selectedEvents.map((event) => (
+                  <EventRow
+                    key={event.id}
+                    event={event}
+                    colorByCategoria={colorByCategoria}
+                    iconByCategoria={iconByCategoria}
+                    bankNameById={bankNameById}
+                  />
+                ))}
+              </ul>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </BottomSheet>
     </PageFade>
   );

@@ -60,17 +60,24 @@ export function AnalisesCard({
   const patrimonioData = patrimonioHistorico.map((s) => ({ monthKey: s.monthKey, total: s.total }));
 
   return (
-    <div className="rounded-card bg-surface p-4">
+    <div className="rounded-card bg-surface shadow-card p-4">
       <div className="mb-4 -mx-4 flex gap-1.5 overflow-x-auto px-4 scrollbar-none">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`shrink-0 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
-              tab === id ? "bg-accent-soft text-accent-strong" : "text-ink-muted hover:bg-bg"
+            className={`relative shrink-0 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
+              tab === id ? "text-accent-strong" : "text-ink-muted hover:bg-bg"
             }`}
           >
-            {label}
+            {tab === id && (
+              <motion.span
+                layoutId="analises-tab-pill"
+                className="absolute inset-0 rounded-xl bg-accent-soft"
+                transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
+              />
+            )}
+            <span className="relative">{label}</span>
           </button>
         ))}
       </div>
@@ -79,23 +86,33 @@ export function AnalisesCard({
         <div className="mb-3 grid grid-cols-2 gap-1.5">
           <button
             onClick={() => setCategoriaTipo("despesa")}
-            className={`rounded-xl px-2 py-1.5 text-xs font-medium transition-colors ${
-              categoriaTipo === "despesa"
-                ? "bg-negative-soft text-negative"
-                : "text-ink-muted hover:bg-bg"
+            className={`relative rounded-xl px-2 py-1.5 text-xs font-medium transition-colors ${
+              categoriaTipo === "despesa" ? "text-negative" : "text-ink-muted hover:bg-bg"
             }`}
           >
-            Despesas
+            {categoriaTipo === "despesa" && (
+              <motion.span
+                layoutId="analises-categoria-tipo-pill"
+                className="absolute inset-0 rounded-xl bg-negative-soft"
+                transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
+              />
+            )}
+            <span className="relative">Despesas</span>
           </button>
           <button
             onClick={() => setCategoriaTipo("receita")}
-            className={`rounded-xl px-2 py-1.5 text-xs font-medium transition-colors ${
-              categoriaTipo === "receita"
-                ? "bg-accent-soft text-accent-strong"
-                : "text-ink-muted hover:bg-bg"
+            className={`relative rounded-xl px-2 py-1.5 text-xs font-medium transition-colors ${
+              categoriaTipo === "receita" ? "text-accent-strong" : "text-ink-muted hover:bg-bg"
             }`}
           >
-            Receitas
+            {categoriaTipo === "receita" && (
+              <motion.span
+                layoutId="analises-categoria-tipo-pill"
+                className="absolute inset-0 rounded-xl bg-accent-soft"
+                transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
+              />
+            )}
+            <span className="relative">Receitas</span>
           </button>
         </div>
       )}

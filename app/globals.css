@@ -14,7 +14,16 @@
   --color-negative: #e05252;
   --color-negative-soft: #fbebeb;
 
+  --color-chart-1: #2a78d6;
+  --color-chart-2: #eb6834;
+  --color-chart-3: #1baf7a;
+  --color-chart-4: #eda100;
+  --color-chart-5: #e87ba4;
+  --color-chart-6: #4a3aa7;
+
   --radius-card: 1.25rem;
+
+  --shadow-card: 0 1px 2px rgba(41, 37, 36, 0.04), 0 10px 24px -16px rgba(41, 37, 36, 0.18);
 }
 
 body {

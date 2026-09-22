@@ -108,7 +108,11 @@ export default function DashboardPage() {
   }, [loading, patrimonio, thisMonth, syncSnapshot]);
 
   if (loading) {
-    return <DashboardSkeleton />;
+    return (
+      <PageFade>
+        <DashboardSkeleton />
+      </PageFade>
+    );
   }
 
   const upcomingEvents = computeUpcomingEvents(transactions, 7);

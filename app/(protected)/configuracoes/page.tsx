@@ -66,6 +66,57 @@ import type {
   TransactionType,
 } from "@/lib/types";
 
+/** Classes reaproveitadas pelos formulários de edição/adição desta página, pra não repetir a mesma string dezenas de vezes. */
+const INPUT_CLASS =
+  "rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent";
+const INPUT_CLASS_COMPACT =
+  "rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent";
+const SAVE_BUTTON_CLASS =
+  "rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60";
+
+/** Trio de ações (mostrar/ocultar, editar, excluir) repetido em toda lista de item desta página. */
+function RowActionButtons({
+  hiddenState,
+  onEdit,
+  onRemove,
+  editLabel,
+  removeLabel,
+}: {
+  hiddenState?: { hidden: boolean; onToggle: () => void; showLabel: string; hideLabel: string };
+  onEdit: () => void;
+  onRemove: () => void;
+  editLabel: string;
+  removeLabel: string;
+}) {
+  return (
+    <span className="flex shrink-0 items-center gap-2.5">
+      {hiddenState && (
+        <button
+          onClick={hiddenState.onToggle}
+          className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
+          aria-label={hiddenState.hidden ? hiddenState.showLabel : hiddenState.hideLabel}
+        >
+          {hiddenState.hidden ? <EyeOff size={14} /> : <Eye size={14} />}
+        </button>
+      )}
+      <button
+        onClick={onEdit}
+        className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
+        aria-label={editLabel}
+      >
+        <Pencil size={14} />
+      </button>
+      <button
+        onClick={onRemove}
+        className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
+        aria-label={removeLabel}
+      >
+        <Trash2 size={14} />
+      </button>
+    </span>
+  );
+}
+
 export default function ConfiguracoesPage() {
   useScrollToHash();
 
@@ -101,7 +152,7 @@ function SectionCard({
         <Icon size={16} />
         {title}
       </h2>
-      <div className="rounded-card bg-surface p-4">{children}</div>
+      <div className="rounded-card bg-surface shadow-card p-4">{children}</div>
     </section>
   );
 }
@@ -178,7 +229,7 @@ function CategoriasSection() {
             placeholder="Nova categoria"
             value={nome}
             onChange={(event) => setNome(event.target.value)}
-            className="min-w-0 flex-1 rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+            className={`min-w-0 flex-1 ${INPUT_CLASS_COMPACT}`}
           />
         </div>
         <div className="flex gap-2">
@@ -219,22 +270,12 @@ function CategoriasSection() {
                   <span className="shrink-0">{c.icone ?? FALLBACK_CATEGORY_ICON}</span>
                   <span className="truncate">{c.nome}</span>
                 </span>
-                <span className="flex shrink-0 items-center gap-2.5">
-                  <button
-                    onClick={() => setEditing(c)}
-                    className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
-                    aria-label="Editar categoria"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    onClick={() => setRemoving({ id: c.id, nome: c.nome })}
-                    className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
-                    aria-label="Remover categoria"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </span>
+                <RowActionButtons
+                  onEdit={() => setEditing(c)}
+                  onRemove={() => setRemoving({ id: c.id, nome: c.nome })}
+                  editLabel="Editar categoria"
+                  removeLabel="Remover categoria"
+                />
               </li>
             ))}
           </ul>
@@ -251,22 +292,12 @@ function CategoriasSection() {
                   <span className="shrink-0">{c.icone ?? FALLBACK_CATEGORY_ICON}</span>
                   <span className="truncate">{c.nome}</span>
                 </span>
-                <span className="flex shrink-0 items-center gap-2.5">
-                  <button
-                    onClick={() => setEditing(c)}
-                    className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
-                    aria-label="Editar categoria"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    onClick={() => setRemoving({ id: c.id, nome: c.nome })}
-                    className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
-                    aria-label="Remover categoria"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </span>
+                <RowActionButtons
+                  onEdit={() => setEditing(c)}
+                  onRemove={() => setRemoving({ id: c.id, nome: c.nome })}
+                  editLabel="Editar categoria"
+                  removeLabel="Remover categoria"
+                />
               </li>
             ))}
           </ul>
@@ -375,13 +406,13 @@ function EditCategoryFields({
           placeholder="Nome da categoria"
           value={nome}
           onChange={(event) => setNome(event.target.value)}
-          className="min-w-0 flex-1 rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          className={`min-w-0 flex-1 ${INPUT_CLASS}`}
         />
       </div>
       <button
         onClick={handleSave}
         disabled={saving}
-        className="mt-3 w-full rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60"
+        className={`mt-3 w-full ${SAVE_BUTTON_CLASS}`}
       >
         Salvar
       </button>
@@ -786,18 +817,18 @@ function AjustarAssinaturaFields({
           placeholder="Descrição"
           value={descricao}
           onChange={(event) => setDescricao(event.target.value)}
-          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS}
         />
         <CurrencyInput
           value={valor}
           onChange={setValor}
-          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS}
         />
         {categoriaOptions.length > 0 && (
           <select
             value={categoria}
             onChange={(event) => setCategoria(event.target.value)}
-            className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+            className={INPUT_CLASS}
           >
             {categoriaOptions.map((c) => (
               <option key={c.id} value={c.nome}>
@@ -810,7 +841,7 @@ function AjustarAssinaturaFields({
           <select
             value={bancoId}
             onChange={(event) => setBancoId(event.target.value)}
-            className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+            className={INPUT_CLASS}
           >
             <option value="">Sem banco vinculado</option>
             {banks.map((banco) => (
@@ -882,7 +913,7 @@ function AjustarAssinaturaFields({
         <button
           onClick={handleSave}
           disabled={saving}
-          className="rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60"
+          className={SAVE_BUTTON_CLASS}
         >
           Salvar ajuste
         </button>
@@ -929,7 +960,7 @@ function BancosSection() {
           placeholder="Nome do banco"
           value={nome}
           onChange={(event) => setNome(event.target.value)}
-          className="rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS_COMPACT}
         />
         <div className="flex gap-2">
           <CurrencyInput
@@ -959,7 +990,7 @@ function BancosSection() {
           placeholder="Dia de fechamento da fatura (opcional)"
           value={diaFechamento}
           onChange={(event) => setDiaFechamento(event.target.value)}
-          className="rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS_COMPACT}
         />
       </form>
 
@@ -991,29 +1022,18 @@ function BancosSection() {
                     {b.nome}
                     {b.oculto && <span className="ml-1.5 text-xs text-ink-muted">(oculto)</span>}
                   </span>
-                  <span className="flex shrink-0 items-center gap-2.5">
-                    <button
-                      onClick={() => setBankOculto(b.id, !b.oculto)}
-                      className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
-                      aria-label={b.oculto ? "Mostrar banco" : "Ocultar banco"}
-                    >
-                      {b.oculto ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
-                    <button
-                      onClick={() => setEditing(b)}
-                      className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
-                      aria-label="Editar banco"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                    <button
-                      onClick={() => setRemoving({ id: b.id, nome: b.nome })}
-                      className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
-                      aria-label="Remover banco"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </span>
+                  <RowActionButtons
+                    hiddenState={{
+                      hidden: b.oculto ?? false,
+                      onToggle: () => setBankOculto(b.id, !b.oculto),
+                      showLabel: "Mostrar banco",
+                      hideLabel: "Ocultar banco",
+                    }}
+                    onEdit={() => setEditing(b)}
+                    onRemove={() => setRemoving({ id: b.id, nome: b.nome })}
+                    editLabel="Editar banco"
+                    removeLabel="Remover banco"
+                  />
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ink-muted">
                   <span className={saldoConta < 0 ? "text-negative" : "text-accent-strong"}>
@@ -1184,7 +1204,7 @@ function EditBankFields({
           placeholder="Nome do banco"
           value={nome}
           onChange={(event) => setNome(event.target.value)}
-          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS}
         />
         <label className="flex flex-col gap-1 text-xs text-ink-muted">
           Saldo em conta atual
@@ -1232,7 +1252,7 @@ function EditBankFields({
         <button
           onClick={handleSave}
           disabled={saving}
-          className="rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60"
+          className={SAVE_BUTTON_CLASS}
         >
           Salvar
         </button>
@@ -1272,7 +1292,7 @@ function CaixinhasSection() {
           placeholder="Nome (ex: Reserva, Viagem)"
           value={nome}
           onChange={(event) => setNome(event.target.value)}
-          className="rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS_COMPACT}
         />
         <div className="flex gap-2">
           <CurrencyInput
@@ -1318,27 +1338,18 @@ function CaixinhasSection() {
                       <span className="text-ink-muted"> / {formatCurrency(p.metaValor)}</span>
                     ) : null}
                   </span>
-                  <button
-                    onClick={() => setPocketOculto(p.id, !p.oculto)}
-                    className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
-                    aria-label={p.oculto ? "Mostrar caixinha" : "Ocultar caixinha"}
-                  >
-                    {p.oculto ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                  <button
-                    onClick={() => setEditing(p)}
-                    className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
-                    aria-label="Editar caixinha"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    onClick={() => setRemoving({ id: p.id, nome: p.nome })}
-                    className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
-                    aria-label="Remover caixinha"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  <RowActionButtons
+                    hiddenState={{
+                      hidden: p.oculto ?? false,
+                      onToggle: () => setPocketOculto(p.id, !p.oculto),
+                      showLabel: "Mostrar caixinha",
+                      hideLabel: "Ocultar caixinha",
+                    }}
+                    onEdit={() => setEditing(p)}
+                    onRemove={() => setRemoving({ id: p.id, nome: p.nome })}
+                    editLabel="Editar caixinha"
+                    removeLabel="Remover caixinha"
+                  />
                 </span>
               </li>
             ))}
@@ -1453,24 +1464,24 @@ function EditPocketFields({
           placeholder="Nome"
           value={nome}
           onChange={(event) => setNome(event.target.value)}
-          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS}
         />
         <CurrencyInput
           value={saldo}
           onChange={setSaldo}
           placeholder="Saldo atual"
-          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS}
         />
         <CurrencyInput
           value={metaValor}
           onChange={setMetaValor}
           placeholder="Meta (opcional)"
-          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS}
         />
         <button
           onClick={handleSave}
           disabled={saving}
-          className="rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60"
+          className={SAVE_BUTTON_CLASS}
         >
           Salvar
         </button>
@@ -1525,7 +1536,7 @@ function TransferSheet({
         <select
           value={fromId}
           onChange={(event) => setFromId(event.target.value)}
-          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS}
         >
           {pockets.map((p) => (
             <option key={p.id} value={p.id}>
@@ -1536,7 +1547,7 @@ function TransferSheet({
         <select
           value={toId}
           onChange={(event) => setToId(event.target.value)}
-          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS}
         >
           {pockets.map((p) => (
             <option key={p.id} value={p.id}>
@@ -1547,18 +1558,18 @@ function TransferSheet({
         <CurrencyInput
           value={valor}
           onChange={setValor}
-          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS}
         />
         <input
           type="date"
           value={data}
           onChange={(event) => setData(event.target.value)}
-          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS}
         />
         <button
           onClick={handleSave}
           disabled={saving}
-          className="rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60"
+          className={SAVE_BUTTON_CLASS}
         >
           Transferir
         </button>
@@ -1599,14 +1610,14 @@ function InvestimentosSection() {
           placeholder="Nome (ex: Tesouro Selic, PETR4)"
           value={nome}
           onChange={(event) => setNome(event.target.value)}
-          className="rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS_COMPACT}
         />
         <input
           type="text"
           placeholder="Descrição (opcional)"
           value={descricao}
           onChange={(event) => setDescricao(event.target.value)}
-          className="rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS_COMPACT}
         />
         <div className="flex gap-2">
           <select
@@ -1673,29 +1684,18 @@ function InvestimentosSection() {
                     : ""}
                 </span>
               </span>
-              <span className="flex shrink-0 items-center gap-2.5">
-                <button
-                  onClick={() => setInvestmentOculto(inv.id, !inv.oculto)}
-                  className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
-                  aria-label={inv.oculto ? "Mostrar investimento" : "Ocultar investimento"}
-                >
-                  {inv.oculto ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-                <button
-                  onClick={() => setEditing(inv)}
-                  className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
-                  aria-label="Editar investimento"
-                >
-                  <Pencil size={14} />
-                </button>
-                <button
-                  onClick={() => setRemoving({ id: inv.id, nome: inv.nome })}
-                  className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
-                  aria-label="Remover investimento"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </span>
+              <RowActionButtons
+                hiddenState={{
+                  hidden: inv.oculto ?? false,
+                  onToggle: () => setInvestmentOculto(inv.id, !inv.oculto),
+                  showLabel: "Mostrar investimento",
+                  hideLabel: "Ocultar investimento",
+                }}
+                onEdit={() => setEditing(inv)}
+                onRemove={() => setRemoving({ id: inv.id, nome: inv.nome })}
+                editLabel="Editar investimento"
+                removeLabel="Remover investimento"
+              />
             </li>
           ))}
         </ul>
@@ -1810,14 +1810,14 @@ function EditInvestmentFields({
           placeholder="Nome"
           value={nome}
           onChange={(event) => setNome(event.target.value)}
-          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS}
         />
         <input
           type="text"
           placeholder="Descrição (opcional)"
           value={descricao}
           onChange={(event) => setDescricao(event.target.value)}
-          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS}
         />
         <select
           value={tipo}
@@ -1825,7 +1825,7 @@ function EditInvestmentFields({
             setTipo(event.target.value as InvestmentType);
             setSubtipo("");
           }}
-          className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+          className={INPUT_CLASS}
         >
           <option value="rendaFixa">Renda fixa</option>
           <option value="rendaVariavel">Renda variável</option>
@@ -1834,7 +1834,7 @@ function EditInvestmentFields({
           <select
             value={subtipo}
             onChange={(event) => setSubtipo(event.target.value as InvestmentSubtipo | "")}
-            className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
+            className={INPUT_CLASS}
           >
             <option value="">Não classificado</option>
             <option value="acao">Ação</option>
@@ -1844,7 +1844,7 @@ function EditInvestmentFields({
         <button
           onClick={handleSave}
           disabled={saving}
-          className="rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60"
+          className={SAVE_BUTTON_CLASS}
         >
           Salvar
         </button>
@@ -1873,7 +1873,7 @@ function ContaSection() {
   return (
     <section>
       <h2 className="mb-3 text-sm font-medium text-ink-muted">Conta</h2>
-      <div className="rounded-card bg-surface p-4">
+      <div className="rounded-card bg-surface shadow-card p-4">
         <p className="mb-3 truncate text-sm text-ink-muted">{user?.email}</p>
 
         <label className="mb-3 flex flex-col gap-1 text-xs text-ink-muted">

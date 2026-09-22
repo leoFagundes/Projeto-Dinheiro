@@ -60,7 +60,7 @@ export function PocketsSection({
               <button
                 onClick={() => setAdjusting(pocket)}
                 aria-label={`Adicionar ou retirar de ${pocket.nome}`}
-                className="relative w-full rounded-card bg-surface p-4 text-left transition-transform active:scale-[0.98]"
+                className="relative w-full rounded-card bg-surface shadow-card p-4 text-left transition-transform active:scale-[0.98]"
               >
                 <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-accent-soft text-accent-strong">
                   <Plus size={14} />

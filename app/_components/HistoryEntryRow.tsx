@@ -60,7 +60,7 @@ export function HistoryEntryRow({ entry }: { entry: HistoryEntry }) {
         exit={{ opacity: 0, scale: 0.96 }}
         transition={{ duration: 0.18 }}
       >
-        <div className="flex items-center justify-between gap-3 rounded-card bg-surface px-4 py-3">
+        <div className="flex items-center justify-between gap-3 rounded-card bg-surface shadow-card px-4 py-3">
           <span className="flex min-w-0 flex-1 items-center gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-bg text-ink-muted">
               <Icon size={16} />

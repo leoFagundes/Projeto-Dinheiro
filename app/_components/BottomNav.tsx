@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "motion/react";
 import { CalendarClock, History, LayoutDashboard, Settings, TrendingUp } from "lucide-react";
 
 const ITEMS = [
@@ -24,10 +25,17 @@ export function BottomNav() {
             <Link
               key={href}
               href={href}
-              className={`flex flex-1 flex-col items-center gap-1 py-3 text-xs transition-colors ${
+              className={`relative flex flex-1 flex-col items-center gap-1 py-3 text-xs transition-colors ${
                 active ? "text-accent-strong" : "text-ink-muted"
               }`}
             >
+              {active && (
+                <motion.span
+                  layoutId="bottom-nav-indicator"
+                  className="absolute top-0 h-0.5 w-8 rounded-full bg-accent"
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
+                />
+              )}
               <Icon size={20} />
               {label}
             </Link>

@@ -78,10 +78,12 @@ export default function HistoricoPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-4 pb-8">
-        <h1 className="text-lg font-semibold">Histórico</h1>
-        <ListSkeleton />
-      </div>
+      <PageFade>
+        <div className="flex flex-col gap-4 pb-8">
+          <h1 className="text-lg font-semibold">Histórico</h1>
+          <ListSkeleton />
+        </div>
+      </PageFade>
     );
   }
 
@@ -251,7 +253,7 @@ export default function HistoricoPage() {
             className="flex flex-col gap-4"
           >
             {!buscando && !filtroAtivo && (
-              <div className="grid grid-cols-3 gap-2 rounded-card bg-surface p-4 text-center">
+              <div className="grid grid-cols-3 gap-2 rounded-card bg-surface shadow-card p-4 text-center">
                 <div>
                   <p className="text-xs text-ink-muted">Receitas</p>
                   <p className="mt-0.5 text-sm font-semibold text-accent-strong">

@@ -68,7 +68,7 @@ export function TransactionListItem({
         exit={{ opacity: 0, scale: 0.96 }}
         transition={{ duration: 0.18 }}
       >
-        <div className="flex items-center justify-between gap-3 rounded-card bg-surface px-4 py-3">
+        <div className="flex items-center justify-between gap-3 rounded-card bg-surface shadow-card px-4 py-3">
           <button
             onClick={() => setEditing(true)}
             aria-label="Editar transação"

@@ -35,7 +35,7 @@ export function ConfirmDialog({
         >
           <motion.div
             onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-sm rounded-card bg-surface p-6 shadow-xl"
+            className="w-full max-w-sm rounded-card bg-surface shadow-card p-6 shadow-xl"
             initial={{ opacity: 0, scale: 0.94 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.94 }}

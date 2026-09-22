@@ -1,5 +1,6 @@
 "use client";
 
+import { useId, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -12,6 +13,7 @@ import {
   ResponsiveContainer,
   Tooltip,
   XAxis,
+  type TooltipContentProps,
 } from "recharts";
 import {
   categoryKey,
@@ -24,6 +26,43 @@ import { EmptyState } from "@/app/_components/EmptyState";
 import { TrendIndicator } from "@/app/_components/TrendIndicator";
 import { PieChart as PieChartIcon, TrendingUp, Wallet, type LucideIcon } from "lucide-react";
 import type { TransactionType } from "@/lib/types";
+
+const GRID_COLOR = "var(--color-border)";
+const TICK_STYLE = { fill: "var(--color-ink-muted)", fontSize: 12 };
+
+/** Tooltip com a mesma cara dos cards do app, em vez da caixa branca padrão do Recharts. */
+function ChartTooltip({ active, payload, label }: TooltipContentProps) {
+  if (!active || !payload || payload.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-border bg-surface px-3 py-2 text-xs shadow-card">
+      {label && <p className="mb-1 font-medium text-ink">{label}</p>}
+      {payload.map((entry, index) => (
+        <p key={index} className="flex items-center gap-1.5 text-ink-muted">
+          <span
+            className="size-2 shrink-0 rounded-full"
+            style={{ backgroundColor: String(entry.color ?? entry.payload?.fill ?? "") }}
+          />
+          {entry.name ? `${entry.name}: ` : ""}
+          {formatCurrency(Number(entry.value))}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+/** Total no centro do donut — o valor já está calculado, só faltava mostrar. */
+function DonutCenterLabel({ value, sub }: { value: number; sub: string }) {
+  return (
+    <>
+      <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-ink text-sm font-semibold">
+        {formatCurrency(value)}
+      </text>
+      <text x="50%" y="60%" textAnchor="middle" dominantBaseline="middle" className="fill-ink-muted text-[10px]">
+        {sub}
+      </text>
+    </>
+  );
+}
 
 export function CategoryPieChart({
   data,
@@ -39,6 +78,8 @@ export function CategoryPieChart({
   colorByCategoria: Map<string, string>;
   iconByCategoria: Map<string, string>;
 }) {
+  const [activeCategoria, setActiveCategoria] = useState<string | null>(null);
+
   if (data.length === 0) {
     return (
       <EmptyState
@@ -74,10 +115,15 @@ export function CategoryPieChart({
                 <Cell
                   key={item.categoria}
                   fill={colorByCategoria.get(categoryKey(tipo, item.categoria)) ?? FALLBACK_CATEGORY_COLOR}
+                  opacity={activeCategoria === null || activeCategoria === item.categoria ? 1 : 0.35}
+                  onMouseEnter={() => setActiveCategoria(item.categoria)}
+                  onMouseLeave={() => setActiveCategoria(null)}
+                  style={{ transition: "opacity 0.15s ease" }}
                 />
               ))}
             </Pie>
-            <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+            <DonutCenterLabel value={totalGeral} sub="Total" />
+            <Tooltip content={(props) => <ChartTooltip {...props} />} />
           </PieChart>
         </ResponsiveContainer>
       </div>
@@ -86,7 +132,11 @@ export function CategoryPieChart({
         {data.map((item) => (
           <li
             key={item.categoria}
-            className="flex items-center justify-between text-sm"
+            onMouseEnter={() => setActiveCategoria(item.categoria)}
+            onMouseLeave={() => setActiveCategoria(null)}
+            className={`flex items-center justify-between rounded-lg px-1.5 py-0.5 text-sm transition-colors ${
+              activeCategoria === item.categoria ? "bg-bg" : ""
+            }`}
           >
             <span className="flex items-center gap-2 text-ink-muted">
               <span
@@ -132,6 +182,7 @@ export function BreakdownChart({
   emptyTitle: string;
   emptyDescription: string;
 }) {
+  const [activeLabel, setActiveLabel] = useState<string | null>(null);
   const filtered = data.filter((item) => item.total > 0);
   if (filtered.length === 0) {
     return <EmptyState icon={Wallet} title={emptyTitle} description={emptyDescription} />;
@@ -157,17 +208,32 @@ export function BreakdownChart({
               stroke="none"
             >
               {filtered.map((item) => (
-                <Cell key={item.label} fill={colorByLabel.get(item.label)} />
+                <Cell
+                  key={item.label}
+                  fill={colorByLabel.get(item.label)}
+                  opacity={activeLabel === null || activeLabel === item.label ? 1 : 0.35}
+                  onMouseEnter={() => setActiveLabel(item.label)}
+                  onMouseLeave={() => setActiveLabel(null)}
+                  style={{ transition: "opacity 0.15s ease" }}
+                />
               ))}
             </Pie>
-            <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+            <DonutCenterLabel value={totalGeral} sub="Total" />
+            <Tooltip content={(props) => <ChartTooltip {...props} />} />
           </PieChart>
         </ResponsiveContainer>
       </div>
 
       <ul className="mt-2 flex flex-col gap-2">
         {filtered.map((item) => (
-          <li key={item.label} className="flex items-center justify-between text-sm">
+          <li
+            key={item.label}
+            onMouseEnter={() => setActiveLabel(item.label)}
+            onMouseLeave={() => setActiveLabel(null)}
+            className={`flex items-center justify-between rounded-lg px-1.5 py-0.5 text-sm transition-colors ${
+              activeLabel === item.label ? "bg-bg" : ""
+            }`}
+          >
             <span className="flex items-center gap-2 text-ink-muted">
               <span
                 className="size-2.5 rounded-full"
@@ -192,7 +258,7 @@ export function BreakdownChart({
 export function AreaTrendChart({
   data,
   label,
-  color = "#2a78d6",
+  color = "var(--color-chart-1)",
   icon: Icon,
   emptyTitle,
   emptyDescription,
@@ -204,6 +270,7 @@ export function AreaTrendChart({
   emptyTitle: string;
   emptyDescription: string;
 }) {
+  const gradientId = useId();
   if (data.length < 2) {
     return <EmptyState icon={Icon} title={emptyTitle} description={emptyDescription} />;
   }
@@ -212,15 +279,22 @@ export function AreaTrendChart({
     <div className="h-48">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-          <CartesianGrid vertical={false} stroke="#e7e4df" />
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={color} stopOpacity={0.35} />
+              <stop offset="95%" stopColor={color} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid vertical={false} stroke={GRID_COLOR} />
           <XAxis
             dataKey="monthKey"
             tickFormatter={(key: string) => formatMonthLabel(key).slice(0, 3)}
-            tick={{ fill: "#79716b", fontSize: 12 }}
+            tick={TICK_STYLE}
             axisLine={false}
             tickLine={false}
           />
           <Tooltip
+            content={(props) => <ChartTooltip {...props} />}
             formatter={(value) => [formatCurrency(Number(value)), label]}
             labelFormatter={(monthLabel) => formatMonthLabel(String(monthLabel))}
           />
@@ -228,9 +302,9 @@ export function AreaTrendChart({
             type="monotone"
             dataKey="total"
             stroke={color}
-            fill={color}
-            fillOpacity={0.15}
+            fill={`url(#${gradientId})`}
             strokeWidth={2}
+            activeDot={{ r: 4 }}
           />
         </AreaChart>
       </ResponsiveContainer>
@@ -242,7 +316,7 @@ export function AreaTrendChart({
 export function SingleSeriesBarChart({
   data,
   label,
-  color = "#2a78d6",
+  color = "var(--color-chart-1)",
   icon: Icon,
   emptyTitle,
   emptyDescription,
@@ -254,6 +328,7 @@ export function SingleSeriesBarChart({
   emptyTitle: string;
   emptyDescription: string;
 }) {
+  const gradientId = useId();
   const hasMovement = data.some((item) => item.total !== 0);
   if (!hasMovement) {
     return <EmptyState icon={Icon} title={emptyTitle} description={emptyDescription} />;
@@ -263,19 +338,26 @@ export function SingleSeriesBarChart({
     <div className="h-48">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-          <CartesianGrid vertical={false} stroke="#e7e4df" />
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.95} />
+              <stop offset="100%" stopColor={color} stopOpacity={0.55} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid vertical={false} stroke={GRID_COLOR} />
           <XAxis
             dataKey="monthKey"
             tickFormatter={(key: string) => formatMonthLabel(key).slice(0, 3)}
-            tick={{ fill: "#79716b", fontSize: 12 }}
+            tick={TICK_STYLE}
             axisLine={false}
             tickLine={false}
           />
           <Tooltip
+            content={(props) => <ChartTooltip {...props} />}
             formatter={(value) => [formatCurrency(Number(value)), label]}
             labelFormatter={(monthLabel) => formatMonthLabel(String(monthLabel))}
           />
-          <Bar dataKey="total" fill={color} radius={[4, 4, 0, 0]} />
+          <Bar dataKey="total" fill={`url(#${gradientId})`} radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -292,6 +374,8 @@ export function MonthlyFlowChart({
 }: {
   data: { monthKey: string; receitas: number; despesas: number; saldoMes: number }[];
 }) {
+  const receitasGradientId = useId();
+  const despesasGradientId = useId();
   const hasMovement = data.some((item) => item.receitas !== 0 || item.despesas !== 0);
   if (!hasMovement) {
     return (
@@ -308,23 +392,34 @@ export function MonthlyFlowChart({
       <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-            <CartesianGrid vertical={false} stroke="#e7e4df" />
+            <defs>
+              <linearGradient id={receitasGradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--color-accent)" stopOpacity={0.95} />
+                <stop offset="100%" stopColor="var(--color-accent)" stopOpacity={0.55} />
+              </linearGradient>
+              <linearGradient id={despesasGradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--color-negative)" stopOpacity={0.95} />
+                <stop offset="100%" stopColor="var(--color-negative)" stopOpacity={0.55} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} stroke={GRID_COLOR} />
             <XAxis
               dataKey="monthKey"
               tickFormatter={(key: string) => formatMonthLabel(key).slice(0, 3)}
-              tick={{ fill: "#79716b", fontSize: 12 }}
+              tick={TICK_STYLE}
               axisLine={false}
               tickLine={false}
             />
             <Tooltip
+              content={(props) => <ChartTooltip {...props} />}
               formatter={(value, name) => [
                 formatCurrency(Number(value)),
                 name === "receitas" ? "Receitas" : "Despesas",
               ]}
               labelFormatter={(label) => formatMonthLabel(String(label))}
             />
-            <Bar dataKey="receitas" fill="#16a34a" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="despesas" fill="#e05252" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="receitas" fill={`url(#${receitasGradientId})`} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="despesas" fill={`url(#${despesasGradientId})`} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

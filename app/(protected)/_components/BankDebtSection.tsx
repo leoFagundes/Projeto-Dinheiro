@@ -82,7 +82,7 @@ export function BankDebtSection({
             ? computeBankFaturaAjustada(banco.id, transactions, mesAnterior, allBanks, bankPayments)
             : 0;
           return (
-            <li key={banco.id} className="rounded-card bg-surface px-4 py-3">
+            <li key={banco.id} className="rounded-card bg-surface shadow-card px-4 py-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-2 text-sm">
                   <Landmark size={16} className="shrink-0 text-ink-muted" />

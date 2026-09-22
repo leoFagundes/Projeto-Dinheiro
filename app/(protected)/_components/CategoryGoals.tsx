@@ -67,7 +67,7 @@ export function CategoryGoals({
             const percent = Math.min((gasto / limiteEfetivo) * 100, 100);
             const over = gasto > limiteEfetivo;
             return (
-              <li key={goal.id} className="rounded-card bg-surface p-4">
+              <li key={goal.id} className="rounded-card bg-surface shadow-card p-4">
                 <div className="flex items-center justify-between gap-2 text-sm">
                   <span className="flex min-w-0 items-center gap-1.5 font-medium">
                     <span className="shrink-0">
