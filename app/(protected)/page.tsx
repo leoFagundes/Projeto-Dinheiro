@@ -188,6 +188,36 @@ export default function DashboardPage() {
           />
         </section>
 
+        {modoDetalhado && (
+          <section id="analises" className="scroll-mt-20">
+            <h2 className="mb-3 text-sm font-medium text-ink-muted">Análises</h2>
+            <AnalisesCard
+              transactions={transactions}
+              banks={banks}
+              patrimonioHistorico={patrimonioHistorico}
+              colorByCategoria={colorByCategoria}
+              iconByCategoria={iconByCategoria}
+              monthlyFlow={monthlyFlow}
+            />
+          </section>
+        )}
+
+        {modoDetalhado && (
+          <section id="metas" className="scroll-mt-20">
+            <h2 className="mb-3 text-sm font-medium text-ink-muted">Limite de gastos por categoria</h2>
+            <CategoryGoals
+              goals={goalsValidos}
+              overrides={goalOverridesValidos}
+              transactions={transactions}
+              iconByCategoria={iconByCategoria}
+              onSetGoal={setGoal}
+              onRemoveGoal={removeGoal}
+              onSetGoalOverride={setGoalOverride}
+              onRemoveGoalOverride={removeGoalOverride}
+            />
+          </section>
+        )}
+
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-medium text-ink-muted">Últimas transações</h2>
@@ -233,36 +263,6 @@ export default function DashboardPage() {
               onMove={moveInvestment}
               onRegistrarRendimento={registrarRendimentoInvestimento}
               onDeleteMovement={deleteInvestmentMovement}
-            />
-          </section>
-        )}
-
-        {modoDetalhado && (
-          <section id="analises" className="scroll-mt-20">
-            <h2 className="mb-3 text-sm font-medium text-ink-muted">Análises</h2>
-            <AnalisesCard
-              transactions={transactions}
-              banks={banks}
-              patrimonioHistorico={patrimonioHistorico}
-              colorByCategoria={colorByCategoria}
-              iconByCategoria={iconByCategoria}
-              monthlyFlow={monthlyFlow}
-            />
-          </section>
-        )}
-
-        {modoDetalhado && (
-          <section id="metas" className="scroll-mt-20">
-            <h2 className="mb-3 text-sm font-medium text-ink-muted">Limite de gastos por categoria</h2>
-            <CategoryGoals
-              goals={goalsValidos}
-              overrides={goalOverridesValidos}
-              transactions={transactions}
-              iconByCategoria={iconByCategoria}
-              onSetGoal={setGoal}
-              onRemoveGoal={removeGoal}
-              onSetGoalOverride={setGoalOverride}
-              onRemoveGoalOverride={removeGoalOverride}
             />
           </section>
         )}

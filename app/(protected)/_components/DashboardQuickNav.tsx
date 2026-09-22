@@ -2,10 +2,10 @@
 
 const SECTIONS = [
   { id: "bancos", label: "Bancos" },
-  { id: "caixinhas", label: "Caixinhas" },
-  { id: "investimentos", label: "Investimentos" },
   { id: "analises", label: "Análises" },
   { id: "metas", label: "Limites" },
+  { id: "caixinhas", label: "Caixinhas" },
+  { id: "investimentos", label: "Investimentos" },
 ];
 
 export function DashboardQuickNav() {
