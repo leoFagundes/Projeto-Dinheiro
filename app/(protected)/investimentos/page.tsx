@@ -14,7 +14,7 @@ import {
   computeYearlyContributions,
   investmentTypeLabel,
 } from "@/lib/derived";
-import { currentYear, formatMonthLabel } from "@/lib/format";
+import { currentYear, formatMonthLabel, formatPercent } from "@/lib/format";
 import type { Investment, InvestmentGoal, InvestmentMovement } from "@/lib/types";
 import { Money, MaskedCurrency } from "@/app/_components/Money";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
@@ -287,7 +287,7 @@ function MetasCarteira({
                         style={{ width: `${percent}%` }}
                       />
                     </div>
-                    <p className="mt-1 text-xs text-ink-muted">{percent.toFixed(0)}%</p>
+                    <p className="mt-1 text-xs text-ink-muted">{formatPercent(percent)}</p>
                   </>
                 )}
               </li>

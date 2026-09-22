@@ -21,10 +21,11 @@ import {
   computeUnifiedHistory,
   type HistoryEntry,
 } from "@/lib/derived";
-import { currentMonthKey, formatCurrency, monthKeyOfIsoDate } from "@/lib/format";
+import { currentMonthKey, monthKeyOfIsoDate } from "@/lib/format";
 import { downloadMonthlyReportCsv } from "@/lib/csv";
 import { MonthFilter } from "@/app/_components/MonthFilter";
 import { EmptyState } from "@/app/_components/EmptyState";
+import { Money, MaskedCurrency } from "@/app/_components/Money";
 import { TransactionListItem } from "@/app/_components/TransactionListItem";
 import { HistoryEntryRow } from "@/app/_components/HistoryEntryRow";
 import { PageFade } from "@/app/_components/PageFade";
@@ -257,23 +258,19 @@ export default function HistoricoPage() {
                 <div>
                   <p className="text-xs text-ink-muted">Receitas</p>
                   <p className="mt-0.5 text-sm font-semibold text-accent-strong">
-                    {formatCurrency(receitas)}
+                    <MaskedCurrency value={receitas} />
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-ink-muted">Despesas</p>
                   <p className="mt-0.5 text-sm font-semibold text-negative">
-                    {formatCurrency(despesas)}
+                    <MaskedCurrency value={despesas} />
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-ink-muted">Saldo</p>
-                  <p
-                    className={`mt-0.5 text-sm font-semibold ${
-                      saldoMes < 0 ? "text-negative" : "text-accent-strong"
-                    }`}
-                  >
-                    {formatCurrency(saldoMes)}
+                  <p className="mt-0.5 text-sm font-semibold">
+                    <Money value={saldoMes} />
                   </p>
                 </div>
               </div>

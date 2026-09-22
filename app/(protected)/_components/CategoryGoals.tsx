@@ -5,9 +5,10 @@ import { Pencil, Target } from "lucide-react";
 import { toast } from "sonner";
 import { useCategories } from "@/lib/use-categories";
 import { computeCategoryBreakdown } from "@/lib/derived";
-import { currentMonthKey, formatCurrency, formatMonthLabel } from "@/lib/format";
+import { currentMonthKey, formatMonthLabel } from "@/lib/format";
 import { categoryKey, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { EmptyState } from "@/app/_components/EmptyState";
+import { MaskedCurrency } from "@/app/_components/Money";
 import { BottomSheet } from "@/app/_components/BottomSheet";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import { MonthFilter } from "@/app/_components/MonthFilter";
@@ -77,7 +78,7 @@ export function CategoryGoals({
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
                     <span className={over ? "text-negative" : "text-ink-muted"}>
-                      {formatCurrency(gasto)} / {formatCurrency(limiteEfetivo)}
+                      <MaskedCurrency value={gasto} /> / <MaskedCurrency value={limiteEfetivo} />
                     </span>
                     <button
                       onClick={() => setOverriding(goal)}
@@ -103,7 +104,7 @@ export function CategoryGoals({
                 )}
                 {over && (
                   <p className="mt-1.5 text-xs text-negative">
-                    {formatCurrency(gasto - limiteEfetivo)} acima do limite
+                    <MaskedCurrency value={gasto - limiteEfetivo} /> acima do limite
                   </p>
                 )}
               </li>
@@ -227,7 +228,7 @@ function MonthOverrideFields({
         {goal.categoria} — {monthLabel}
       </p>
       <p className="mb-4 text-xs text-ink-muted">
-        Esse valor substitui o limite geral ({formatCurrency(goal.limiteMensal)}) só em{" "}
+        Esse valor substitui o limite geral (<MaskedCurrency value={goal.limiteMensal} />) só em{" "}
         {monthLabel.toLowerCase()}. Os outros meses continuam com o limite geral, mesmo os que já
         passaram.
       </p>

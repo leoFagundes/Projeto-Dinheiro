@@ -11,10 +11,11 @@ import { useBanks } from "@/lib/use-banks";
 import { assignCategoryColors, categoryKey, mapCategoryIcons } from "@/lib/categories";
 import { FALLBACK_CATEGORY_COLOR, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { computeMonthEvents, type CalendarEvent } from "@/lib/derived";
-import { formatCurrency, monthKeyOf } from "@/lib/format";
+import { monthKeyOf } from "@/lib/format";
 import { PageFade } from "@/app/_components/PageFade";
 import { BottomSheet } from "@/app/_components/BottomSheet";
 import { EmptyState } from "@/app/_components/EmptyState";
+import { Money } from "@/app/_components/Money";
 import { Skeleton } from "@/app/_components/Skeleton";
 
 export default function CalendarioPage() {
@@ -236,11 +237,7 @@ function EventRow({
           </span>
         </span>
       </span>
-      <span
-        className={`shrink-0 font-medium ${signedValue < 0 ? "text-negative" : "text-accent-strong"}`}
-      >
-        {formatCurrency(signedValue)}
-      </span>
+      <Money value={signedValue} className="shrink-0 font-medium" />
     </li>
   );
 }

@@ -23,19 +23,28 @@ import {
 } from "@/lib/categories";
 import { formatCurrency, formatMonthLabel } from "@/lib/format";
 import { EmptyState } from "@/app/_components/EmptyState";
+import { MaskedCurrency } from "@/app/_components/Money";
 import { TrendIndicator } from "@/app/_components/TrendIndicator";
+import { useValuesVisibility } from "@/lib/visibility-context";
 import { PieChart as PieChartIcon, TrendingUp, Wallet, type LucideIcon } from "lucide-react";
 import type { TransactionType } from "@/lib/types";
 
 const GRID_COLOR = "var(--color-border)";
 const TICK_STYLE = { fill: "var(--color-ink-muted)", fontSize: 12 };
 
-/** Tooltip com a mesma cara dos cards do app, em vez da caixa branca padrão do Recharts. */
-function ChartTooltip({ active, payload, label }: TooltipContentProps) {
+/**
+ * Tooltip com a mesma cara dos cards do app, em vez da caixa branca padrão do
+ * Recharts. Como substitui o `content` padrão, o Recharts não aplica mais
+ * `formatter` sozinho — aqui sempre formata como moeda direto; `labelFormatter`
+ * (usado pros meses no eixo X) continua funcionando porque é chamado à mão.
+ */
+function ChartTooltip({ active, payload, label, labelFormatter }: TooltipContentProps) {
+  const { hidden } = useValuesVisibility();
   if (!active || !payload || payload.length === 0) return null;
+  const displayLabel = labelFormatter ? labelFormatter(label, payload) : label;
   return (
     <div className="rounded-xl border border-border bg-surface px-3 py-2 text-xs shadow-card">
-      {label && <p className="mb-1 font-medium text-ink">{label}</p>}
+      {displayLabel != null && <p className="mb-1 font-medium text-ink">{displayLabel}</p>}
       {payload.map((entry, index) => (
         <p key={index} className="flex items-center gap-1.5 text-ink-muted">
           <span
@@ -43,7 +52,7 @@ function ChartTooltip({ active, payload, label }: TooltipContentProps) {
             style={{ backgroundColor: String(entry.color ?? entry.payload?.fill ?? "") }}
           />
           {entry.name ? `${entry.name}: ` : ""}
-          {formatCurrency(Number(entry.value))}
+          {hidden ? "••••" : formatCurrency(Number(entry.value))}
         </p>
       ))}
     </div>
@@ -52,10 +61,11 @@ function ChartTooltip({ active, payload, label }: TooltipContentProps) {
 
 /** Total no centro do donut — o valor já está calculado, só faltava mostrar. */
 function DonutCenterLabel({ value, sub }: { value: number; sub: string }) {
+  const { hidden } = useValuesVisibility();
   return (
     <>
       <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-ink text-sm font-semibold">
-        {formatCurrency(value)}
+        {hidden ? "••••" : formatCurrency(value)}
       </text>
       <text x="50%" y="60%" textAnchor="middle" dominantBaseline="middle" className="fill-ink-muted text-[10px]">
         {sub}
@@ -160,7 +170,7 @@ export function CategoryPieChart({
                   className="text-[11px]"
                 />
               )}
-              {formatCurrency(item.total)}
+              <MaskedCurrency value={item.total} />
               <span className="text-xs text-ink-muted">
                 {Math.round((item.total / totalGeral) * 100)}%
               </span>
@@ -242,7 +252,7 @@ export function BreakdownChart({
               {item.label}
             </span>
             <span className="flex items-center gap-2">
-              {formatCurrency(item.total)}
+              <MaskedCurrency value={item.total} />
               <span className="text-xs text-ink-muted">
                 {Math.round((item.total / totalGeral) * 100)}%
               </span>
@@ -295,12 +305,12 @@ export function AreaTrendChart({
           />
           <Tooltip
             content={(props) => <ChartTooltip {...props} />}
-            formatter={(value) => [formatCurrency(Number(value)), label]}
             labelFormatter={(monthLabel) => formatMonthLabel(String(monthLabel))}
           />
           <Area
             type="monotone"
             dataKey="total"
+            name={label}
             stroke={color}
             fill={`url(#${gradientId})`}
             strokeWidth={2}
@@ -354,10 +364,9 @@ export function SingleSeriesBarChart({
           />
           <Tooltip
             content={(props) => <ChartTooltip {...props} />}
-            formatter={(value) => [formatCurrency(Number(value)), label]}
             labelFormatter={(monthLabel) => formatMonthLabel(String(monthLabel))}
           />
-          <Bar dataKey="total" fill={`url(#${gradientId})`} radius={[4, 4, 0, 0]} />
+          <Bar dataKey="total" name={label} fill={`url(#${gradientId})`} radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -412,14 +421,10 @@ export function MonthlyFlowChart({
             />
             <Tooltip
               content={(props) => <ChartTooltip {...props} />}
-              formatter={(value, name) => [
-                formatCurrency(Number(value)),
-                name === "receitas" ? "Receitas" : "Despesas",
-              ]}
               labelFormatter={(label) => formatMonthLabel(String(label))}
             />
-            <Bar dataKey="receitas" fill={`url(#${receitasGradientId})`} radius={[4, 4, 0, 0]} />
-            <Bar dataKey="despesas" fill={`url(#${despesasGradientId})`} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="receitas" name="Receitas" fill={`url(#${receitasGradientId})`} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="despesas" name="Despesas" fill={`url(#${despesasGradientId})`} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

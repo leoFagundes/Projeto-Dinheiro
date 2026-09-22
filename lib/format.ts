@@ -5,6 +5,14 @@ export function formatCurrency(value: number): string {
   });
 }
 
+/** Formata porcentagem sem casas fixas: inteiro fica sem decimal, fracionário mostra até `maxDecimals` — sem isso, valores pequenos (ex: 0,2%) apareciam arredondados pra "0%". */
+export function formatPercent(value: number, maxDecimals = 2): string {
+  return `${value.toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: maxDecimals,
+  })}%`;
+}
+
 export function formatMonthLabel(monthKey: string): string {
   const [year, month] = monthKey.split("-").map(Number);
   const date = new Date(year, month - 1, 1);

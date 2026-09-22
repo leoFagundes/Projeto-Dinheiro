@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { CalendarClock, Repeat } from "lucide-react";
 import { EmptyState } from "@/app/_components/EmptyState";
+import { Money } from "@/app/_components/Money";
 import { categoryKey, FALLBACK_CATEGORY_COLOR, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import type { CalendarEvent } from "@/lib/derived";
 
 export function UpcomingEvents({
@@ -69,11 +70,7 @@ export function UpcomingEvents({
                   </span>
                 </span>
               </span>
-              <span
-                className={`shrink-0 font-medium ${signedValue < 0 ? "text-negative" : "text-accent-strong"}`}
-              >
-                {formatCurrency(signedValue)}
-              </span>
+              <Money value={signedValue} className="shrink-0 font-medium" />
             </li>
           );
         })}

@@ -8,7 +8,8 @@ import { EmptyState } from "@/app/_components/EmptyState";
 import { BottomSheet } from "@/app/_components/BottomSheet";
 import { ConfirmDialog } from "@/app/_components/ConfirmDialog";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
-import { formatCurrency, formatDate, todayIsoDate } from "@/lib/format";
+import { MaskedCurrency } from "@/app/_components/Money";
+import { formatDate, todayIsoDate } from "@/lib/format";
 import { investmentTypeLabel } from "@/lib/derived";
 import type { Bank, Investment, InvestmentMovement } from "@/lib/types";
 
@@ -67,12 +68,12 @@ export function InvestmentsSection({
                   {investimento.nome}
                 </p>
                 <p className="mt-1 text-lg font-semibold text-accent-strong">
-                  {formatCurrency(valorAtual)}
+                  <MaskedCurrency value={valorAtual} />
                 </p>
                 {rendimento !== 0 && (
                   <p className={`text-[11px] ${rendimento > 0 ? "text-accent-strong" : "text-negative"}`}>
                     {rendimento > 0 ? "rendeu +" : "rendeu "}
-                    {formatCurrency(rendimento)}
+                    <MaskedCurrency value={rendimento} />
                   </p>
                 )}
                 <p className="mt-1 text-[11px] text-ink-muted">
@@ -249,14 +250,14 @@ function MoveInvestmentFields({
         <p className="text-xs text-ink-muted">{investment.descricao}</p>
       )}
       <p className="mb-4 text-xs text-ink-muted">
-        Total investido: {formatCurrency(investment.valorInvestido)}
+        Total investido: <MaskedCurrency value={investment.valorInvestido} />
         {isVariavel && investment.totalCotas ? ` · ${investment.totalCotas} cotas` : ""}
         {rendimento !== 0 && (
           <>
             {" · "}
             <span className={rendimento > 0 ? "text-accent-strong" : "text-negative"}>
               rendeu {rendimento > 0 ? "+" : ""}
-              {formatCurrency(rendimento)}
+              <MaskedCurrency value={rendimento} />
             </span>
           </>
         )}
@@ -395,7 +396,7 @@ function MoveInvestmentFields({
                   <span className="flex items-center gap-2">
                     <span className={isNegative ? "text-negative" : "text-accent-strong"}>
                       {movimento.tipo === "rendimento" && movimento.valor >= 0 ? "+" : ""}
-                      {formatCurrency(movimento.valor)}
+                      <MaskedCurrency value={movimento.valor} />
                     </span>
                     <button
                       onClick={() => setRemoving(movimento)}

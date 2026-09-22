@@ -29,8 +29,7 @@ import { PageFade } from "@/app/_components/PageFade";
 import { DashboardSkeleton } from "@/app/_components/Skeleton";
 import { SummaryCards } from "./_components/SummaryCards";
 import { DashboardQuickNav } from "./_components/DashboardQuickNav";
-import { RecentTransactions } from "./_components/RecentTransactions";
-import { UpcomingEvents } from "./_components/UpcomingEvents";
+import { ActivitySection } from "./_components/ActivitySection";
 import { AnalisesCard } from "./_components/AnalisesCard";
 import { BankDebtSection } from "./_components/BankDebtSection";
 import { CategoryGoals } from "./_components/CategoryGoals";
@@ -160,20 +159,15 @@ export default function DashboardPage() {
 
         <DashboardQuickNav />
 
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-ink-muted">Próximos 7 dias</h2>
-            <Link href="/calendario" className="text-xs text-accent-strong hover:underline">
-              Ver agenda
-            </Link>
-          </div>
-          <UpcomingEvents
-            events={upcomingEvents}
-            colorByCategoria={colorByCategoria}
-            iconByCategoria={iconByCategoria}
-            bankNameById={bankNameById}
-          />
-        </section>
+        <ActivitySection
+          upcomingEvents={upcomingEvents}
+          transactions={transactions}
+          onDeleteTransaction={deleteTransaction}
+          colorByCategoria={colorByCategoria}
+          iconByCategoria={iconByCategoria}
+          bankNameById={bankNameById}
+          originDateById={originDateById}
+        />
 
         <section id="bancos" className="scroll-mt-20">
           <h2 className="mb-3 text-sm font-medium text-ink-muted">Bancos</h2>
@@ -221,23 +215,6 @@ export default function DashboardPage() {
             />
           </section>
         )}
-
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-ink-muted">Últimas transações</h2>
-            <Link href="/historico" className="text-xs text-accent-strong hover:underline">
-              Ver tudo
-            </Link>
-          </div>
-          <RecentTransactions
-            transactions={transactions}
-            onDelete={deleteTransaction}
-            colorByCategoria={colorByCategoria}
-            iconByCategoria={iconByCategoria}
-            bankNameById={bankNameById}
-            originDateById={originDateById}
-          />
-        </section>
 
         <section id="caixinhas" className="scroll-mt-20">
           <h2 className="mb-3 text-sm font-medium text-ink-muted">Caixinhas</h2>

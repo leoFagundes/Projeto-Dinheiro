@@ -8,7 +8,8 @@ import { EmptyState } from "@/app/_components/EmptyState";
 import { BottomSheet } from "@/app/_components/BottomSheet";
 import { ConfirmDialog } from "@/app/_components/ConfirmDialog";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
-import { formatCurrency, formatDate, todayIsoDate } from "@/lib/format";
+import { MaskedCurrency } from "@/app/_components/Money";
+import { formatDate, todayIsoDate } from "@/lib/format";
 import { computePocketRendimento } from "@/lib/derived";
 import type { Bank, Pocket, PocketMovement } from "@/lib/types";
 
@@ -70,12 +71,12 @@ export function PocketsSection({
                   {pocket.nome}
                 </p>
                 <p className="mt-1 text-lg font-semibold text-accent-strong">
-                  {formatCurrency(pocket.saldo)}
+                  <MaskedCurrency value={pocket.saldo} />
                 </p>
                 {rendimento !== 0 && (
                   <p className={`text-[11px] ${rendimento > 0 ? "text-accent-strong" : "text-negative"}`}>
                     {rendimento > 0 ? "rendeu +" : "rendeu "}
-                    {formatCurrency(rendimento)}
+                    <MaskedCurrency value={rendimento} />
                   </p>
                 )}
                 {percent !== null && (
@@ -87,7 +88,7 @@ export function PocketsSection({
                       />
                     </div>
                     <p className="mt-1 text-[11px] text-ink-muted">
-                      meta: {formatCurrency(pocket.metaValor!)}
+                      meta: <MaskedCurrency value={pocket.metaValor!} />
                     </p>
                   </>
                 )}
@@ -266,9 +267,9 @@ function AdjustPocketFields({
       <p className="font-medium">{pocket.nome}</p>
       {rendimento !== 0 && (
         <p className={`mb-3 text-xs ${rendimento > 0 ? "text-accent-strong" : "text-negative"}`}>
-          Total aportado: {formatCurrency(pocket.saldo - rendimento)} · Rendeu:{" "}
+          Total aportado: <MaskedCurrency value={pocket.saldo - rendimento} /> · Rendeu:{" "}
           {rendimento > 0 ? "+" : ""}
-          {formatCurrency(rendimento)}
+          <MaskedCurrency value={rendimento} />
         </p>
       )}
 
@@ -393,7 +394,7 @@ function AdjustPocketFields({
                   <span className="flex items-center gap-2">
                     <span className={isNegative ? "text-negative" : "text-accent-strong"}>
                       {movimento.tipo === "rendimento" && movimento.valor >= 0 ? "+" : ""}
-                      {formatCurrency(movimento.valor)}
+                      <MaskedCurrency value={movimento.valor} />
                     </span>
                     <button
                       onClick={() => setRemoving(movimento)}

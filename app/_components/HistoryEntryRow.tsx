@@ -13,7 +13,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { Money, MaskedCurrency } from "./Money";
+import { formatDate } from "@/lib/format";
 import type { HistoryEntry } from "@/lib/derived";
 
 const ICON_BY_TIPO = {
@@ -75,16 +76,9 @@ export function HistoryEntryRow({ entry }: { entry: HistoryEntry }) {
           </span>
           <div className="flex shrink-0 items-center gap-3">
             {entry.direcao === "neutro" ? (
-              <span className="text-sm font-medium text-ink-muted">
-                {formatCurrency(entry.valor)}
-              </span>
+              <MaskedCurrency value={entry.valor} className="text-sm font-medium text-ink-muted" />
             ) : (
-              <span
-                className={`text-sm font-medium ${signedValue < 0 ? "text-negative" : "text-accent-strong"}`}
-              >
-                {signedValue >= 0 ? "+" : ""}
-                {formatCurrency(signedValue)}
-              </span>
+              <Money value={signedValue} showSign className="text-sm font-medium" />
             )}
             {entry.onDelete && (
               <button

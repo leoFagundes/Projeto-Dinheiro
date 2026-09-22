@@ -9,12 +9,14 @@ import { BottomSheet } from "@/app/_components/BottomSheet";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import { MonthFilter } from "@/app/_components/MonthFilter";
 import { TransactionListItem } from "@/app/_components/TransactionListItem";
+import { MaskedCurrency } from "@/app/_components/Money";
 import {
   computeBankFaturaAjustada,
   computeBankFaturaTransactions,
   computeOriginDateById,
 } from "@/lib/derived";
 import { addMonthsToKey, currentMonthKey, formatCurrency, formatMonthLabel, todayIsoDate } from "@/lib/format";
+import { useValuesVisibility } from "@/lib/visibility-context";
 import type { Bank, BankPayment, Transaction } from "@/lib/types";
 
 export function BankDebtSection({
@@ -91,11 +93,11 @@ export function BankDebtSection({
                     <span
                       className={`block text-xs ${saldoConta < 0 ? "text-negative" : "text-ink-muted"}`}
                     >
-                      saldo em conta: {formatCurrency(saldoConta)}
+                      saldo em conta: <MaskedCurrency value={saldoConta} />
                     </span>
                     {mesAtual && banco.saldoDevedor > 0 && (
                       <span className="block text-xs text-ink-muted">
-                        + {formatCurrency(banco.saldoDevedor)} de saldo anterior
+                        + <MaskedCurrency value={banco.saldoDevedor} /> de saldo anterior
                       </span>
                     )}
                   </span>
@@ -105,7 +107,7 @@ export function BankDebtSection({
                   className="shrink-0 text-right transition-transform active:scale-95"
                 >
                   <span className="block text-sm font-medium text-negative underline decoration-dotted underline-offset-2">
-                    {formatCurrency(fatura)}
+                    <MaskedCurrency value={fatura} />
                   </span>
                   <span className="block text-[11px] text-ink-muted">
                     fatura {mesAtual ? "deste mês" : "do mês"}
@@ -116,7 +118,7 @@ export function BankDebtSection({
               {faturaMesAnteriorNaoPaga > 0 && (
                 <p className="mt-2 flex items-start gap-1.5 rounded-xl bg-negative-soft px-3 py-2 text-[11px] text-negative">
                   <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                  {formatCurrency(faturaMesAnteriorNaoPaga)} da fatura do mês passado ainda não
+                  <MaskedCurrency value={faturaMesAnteriorNaoPaga} /> da fatura do mês passado ainda não
                   consta como paga nem está no saldo anterior — pague, ou ajuste na mão em
                   Configurações.
                 </p>
@@ -128,7 +130,7 @@ export function BankDebtSection({
                   className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-accent bg-accent-soft px-3 py-2 text-xs font-medium text-accent-strong transition-transform active:scale-[0.98] hover:bg-accent/20"
                 >
                   <Receipt size={14} />
-                  Pagar fatura ({formatCurrency(totalDevido)})
+                  Pagar fatura (<MaskedCurrency value={totalDevido} />)
                 </button>
               )}
             </li>
@@ -234,10 +236,14 @@ function FaturaDetalheSheet({
 
           {jaPago > 0 && (
             <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-bg px-4 py-3 text-xs text-ink-muted">
-              <span>Lançado: {formatCurrency(totalLancado)}</span>
-              <span className="text-accent-strong">Pago: {formatCurrency(jaPago)}</span>
+              <span>
+                Lançado: <MaskedCurrency value={totalLancado} />
+              </span>
+              <span className="text-accent-strong">
+                Pago: <MaskedCurrency value={jaPago} />
+              </span>
               <span className={faturaRestante > 0 ? "text-negative" : "text-accent-strong"}>
-                Falta: {formatCurrency(faturaRestante)}
+                Falta: <MaskedCurrency value={faturaRestante} />
               </span>
             </div>
           )}
@@ -280,6 +286,7 @@ function TransferBankSheet({
   onTransfer: (fromBancoId: string, toBancoId: string, valor: number, data?: string) => Promise<void>;
   onClose: () => void;
 }) {
+  const { hidden } = useValuesVisibility();
   const [fromId, setFromId] = useState(banks[0]?.id ?? "");
   const [toId, setToId] = useState(banks[1]?.id ?? "");
   const [valor, setValor] = useState(0);
@@ -330,7 +337,8 @@ function TransferBankSheet({
         >
           {banks.map((banco) => (
             <option key={banco.id} value={banco.id}>
-              De: {banco.nome} ({formatCurrency(saldoContaPorBanco.get(banco.id) ?? 0)})
+              De: {banco.nome} (
+              {hidden ? "••••" : formatCurrency(saldoContaPorBanco.get(banco.id) ?? 0)})
             </option>
           ))}
         </select>
@@ -341,7 +349,8 @@ function TransferBankSheet({
         >
           {banks.map((banco) => (
             <option key={banco.id} value={banco.id}>
-              Para: {banco.nome} ({formatCurrency(saldoContaPorBanco.get(banco.id) ?? 0)})
+              Para: {banco.nome} (
+              {hidden ? "••••" : formatCurrency(saldoContaPorBanco.get(banco.id) ?? 0)})
             </option>
           ))}
         </select>
@@ -361,17 +370,14 @@ function TransferBankSheet({
           <div className="flex flex-col gap-1 rounded-2xl bg-bg px-4 py-3 text-xs text-ink-muted">
             <span className="flex items-center justify-between">
               <span className="truncate">{fromBanco.nome} depois</span>
-              <span
-                className={
-                  saldoOrigemAtual - valor < 0 ? "font-medium text-negative" : "font-medium text-ink"
-                }
-              >
-                {formatCurrency(saldoOrigemAtual - valor)}
-              </span>
+              <MaskedCurrency
+                value={saldoOrigemAtual - valor}
+                className={saldoOrigemAtual - valor < 0 ? "font-medium text-negative" : "font-medium text-ink"}
+              />
             </span>
             <span className="flex items-center justify-between">
               <span className="truncate">{toBanco.nome} depois</span>
-              <span className="font-medium text-ink">{formatCurrency(saldoDestinoAtual + valor)}</span>
+              <MaskedCurrency value={saldoDestinoAtual + valor} className="font-medium text-ink" />
             </span>
           </div>
         )}
@@ -455,7 +461,7 @@ function PayFaturaFields({
     <>
       <p className="mb-1 font-medium">Pagar fatura — {banco.nome}</p>
       <p className="mb-4 text-xs text-ink-muted">
-        Total devido: {formatCurrency(totalDevido)} (fatura do mês + saldo anterior). Esse valor
+        Total devido: <MaskedCurrency value={totalDevido} /> (fatura do mês + saldo anterior). Esse valor
         sai do saldo em conta do banco e some da fatura exibida. Pra corrigir algo na mão, use o
         botão de editar em Configurações → Bancos.
       </p>

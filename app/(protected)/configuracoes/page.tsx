@@ -40,7 +40,6 @@ import {
   addMonthsToKey,
   clampDayToMonth,
   currentMonthKey,
-  formatCurrency,
   formatDate,
   formatMonthLabel,
   monthKeyOfIsoDate,
@@ -49,6 +48,7 @@ import {
 import { categoryKey, FALLBACK_CATEGORY_ICON, mapCategoryIcons } from "@/lib/categories";
 import { useScrollToHash } from "@/lib/use-scroll-to-hash";
 import { PageFade } from "@/app/_components/PageFade";
+import { MaskedCurrency } from "@/app/_components/Money";
 import { ConfirmDialog } from "@/app/_components/ConfirmDialog";
 import { EmojiPickerSheet } from "@/app/_components/EmojiPickerSheet";
 import { BottomSheet } from "@/app/_components/BottomSheet";
@@ -523,12 +523,18 @@ function AssinaturasSection() {
             <div className="mb-3 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-muted">
               {totalMensal > 0 && (
                 <span>
-                  Por mês: <span className="font-medium text-negative">{formatCurrency(totalMensal)}</span>
+                  Por mês:{" "}
+                  <span className="font-medium text-negative">
+                    <MaskedCurrency value={totalMensal} />
+                  </span>
                 </span>
               )}
               {totalAnual > 0 && (
                 <span>
-                  Por ano: <span className="font-medium text-negative">{formatCurrency(totalAnual)}</span>
+                  Por ano:{" "}
+                  <span className="font-medium text-negative">
+                    <MaskedCurrency value={totalAnual} />
+                  </span>
                 </span>
               )}
             </div>
@@ -579,12 +585,17 @@ function AssinaturasSection() {
                           )}
                         </span>
                         <span className="block truncate text-xs text-ink-muted">
-                          {formatCurrency(t.valor)} · dia {Number(t.data.slice(8, 10))}
+                          <MaskedCurrency value={t.valor} /> · dia {Number(t.data.slice(8, 10))}
                           {t.bancoId && bankNameById.get(t.bancoId) ? ` · ${bankNameById.get(t.bancoId)}` : ""}
                         </span>
                         <span className="block truncate text-xs text-ink-muted">
                           {proximaCobranca ? `próxima: ${formatDate(proximaCobranca)}` : "sem próxima cobrança"}
-                          {totalGasto > 0 ? ` · já gasto: ${formatCurrency(totalGasto)}` : ""}
+                          {totalGasto > 0 && (
+                            <>
+                              {" "}
+                              · já gasto: <MaskedCurrency value={totalGasto} />
+                            </>
+                          )}
                           {t.recorrenteFim ? ` · até ${formatMonthLabel(t.recorrenteFim)}` : ""}
                         </span>
                       </span>
@@ -620,7 +631,9 @@ function AssinaturasSection() {
                   >
                     <span className="min-w-0">
                       <span className="block truncate">{t.descricao}</span>
-                      <span className="block truncate text-xs text-ink-muted">{formatCurrency(t.valor)}</span>
+                      <span className="block truncate text-xs text-ink-muted">
+                        <MaskedCurrency value={t.valor} />
+                      </span>
                     </span>
                     <span className="flex shrink-0 items-center gap-3">
                       <button
@@ -1037,16 +1050,16 @@ function BancosSection() {
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ink-muted">
                   <span className={saldoConta < 0 ? "text-negative" : "text-accent-strong"}>
-                    saldo em conta: {formatCurrency(saldoConta)}
+                    saldo em conta: <MaskedCurrency value={saldoConta} />
                   </span>
                   {faturaAjustada > 0 && (
                     <span className="text-negative">
-                      fatura do mês: {formatCurrency(faturaAjustada)}
+                      fatura do mês: <MaskedCurrency value={faturaAjustada} />
                     </span>
                   )}
                   {b.saldoDevedor > 0 && (
                     <span className="text-negative">
-                      saldo anterior: {formatCurrency(b.saldoDevedor)}
+                      saldo anterior: <MaskedCurrency value={b.saldoDevedor} />
                     </span>
                   )}
                   {b.diaFechamento && <span>fecha dia {b.diaFechamento}</span>}
@@ -1333,9 +1346,12 @@ function CaixinhasSection() {
                 </span>
                 <span className="flex items-center gap-2.5">
                   <span className="text-accent-strong">
-                    {formatCurrency(p.saldo)}
+                    <MaskedCurrency value={p.saldo} />
                     {p.metaValor ? (
-                      <span className="text-ink-muted"> / {formatCurrency(p.metaValor)}</span>
+                      <span className="text-ink-muted">
+                        {" "}
+                        / <MaskedCurrency value={p.metaValor} />
+                      </span>
                     ) : null}
                   </span>
                   <RowActionButtons
@@ -1678,7 +1694,7 @@ function InvestimentosSection() {
                   <span className="block truncate text-xs text-ink-muted">{inv.descricao}</span>
                 )}
                 <span className="text-xs text-ink-muted">
-                  {investmentTypeLabel(inv)} · {formatCurrency(inv.valorInvestido)}
+                  {investmentTypeLabel(inv)} · <MaskedCurrency value={inv.valorInvestido} />
                   {inv.tipo === "rendaVariavel" && inv.totalCotas
                     ? ` · ${inv.totalCotas} cotas`
                     : ""}
