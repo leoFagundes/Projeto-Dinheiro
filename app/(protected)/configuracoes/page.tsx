@@ -625,14 +625,21 @@ function SegurancaSection() {
 
 function AppLockSettings() {
   const { user } = useAuth();
-  const [enabled, setEnabled] = useState(isAppLockEnabled);
-  const [hasBio, setHasBio] = useState(hasBiometricCredential);
+  // Seguro ler o uid aqui (sem efeito) porque este componente só é montado
+  // dentro do layout protegido, que já garante `user` resolvido antes de
+  // renderizar a página de Ajustes.
+  const [enabled, setEnabled] = useState(() => (user ? isAppLockEnabled(user.uid) : false));
+  const [hasBio, setHasBio] = useState(() => (user ? hasBiometricCredential(user.uid) : false));
   const [settingPin, setSettingPin] = useState(false);
   const bioAvailable = supportsBiometric();
 
+  if (!user) return null;
+  const uid = user.uid;
+  const email = user.email;
+
   function handleToggle() {
     if (enabled) {
-      disableAppLock();
+      disableAppLock(uid);
       setEnabled(false);
       setHasBio(false);
       toast.success("Bloqueio desativado.");
@@ -642,15 +649,14 @@ function AppLockSettings() {
   }
 
   async function handlePinSet(pin: string) {
-    await setAppLockPin(pin);
+    await setAppLockPin(uid, pin);
     setEnabled(true);
     setSettingPin(false);
     toast.success("Bloqueio ativado.");
   }
 
   async function handleEnableBiometric() {
-    if (!user) return;
-    const ok = await registerBiometric(user.uid, user.email ?? "usuário");
+    const ok = await registerBiometric(uid, email ?? "usuário");
     if (ok) {
       setHasBio(true);
       toast.success("Biometria ativada.");

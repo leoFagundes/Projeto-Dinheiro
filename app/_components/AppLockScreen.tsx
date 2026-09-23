@@ -7,13 +7,13 @@ import { hasBiometricCredential, verifyAppLockPin, verifyBiometric } from "@/lib
 const PIN_LENGTH = 4;
 const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
-export function AppLockScreen({ onUnlock }: { onUnlock: () => void }) {
+export function AppLockScreen({ uid, onUnlock }: { uid: string; onUnlock: () => void }) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState(false);
   const [checkingBiometric, setCheckingBiometric] = useState(false);
 
   async function submitPin(value: string) {
-    const ok = await verifyAppLockPin(value);
+    const ok = await verifyAppLockPin(uid, value);
     if (ok) {
       onUnlock();
     } else {
@@ -34,7 +34,7 @@ export function AppLockScreen({ onUnlock }: { onUnlock: () => void }) {
 
   async function tryBiometric() {
     setCheckingBiometric(true);
-    const ok = await verifyBiometric();
+    const ok = await verifyBiometric(uid);
     setCheckingBiometric(false);
     if (ok) onUnlock();
   }
@@ -92,7 +92,7 @@ export function AppLockScreen({ onUnlock }: { onUnlock: () => void }) {
         </button>
       </div>
 
-      {hasBiometricCredential() && (
+      {hasBiometricCredential(uid) && (
         <button
           type="button"
           onClick={tryBiometric}

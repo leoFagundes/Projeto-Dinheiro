@@ -7,11 +7,24 @@
 // com o autenticador da própria plataforma (Face/Touch ID, impressão digital
 // do Android), também sem depender de servidor — só verifica que o
 // autenticador local aprova, sem validar assinatura contra nada remoto.
+//
+// Todas as chaves são escopadas por uid: o mesmo aparelho pode ter mais de
+// uma conta logada em momentos diferentes, e sem o uid na chave o PIN/
+// biometria de uma conta "vazava" pra outra (pedia a digital da conta
+// errada depois de trocar de usuário).
 
-const PIN_HASH_KEY = "bloqueio:pinHash";
-const PIN_SALT_KEY = "bloqueio:salt";
-const ENABLED_KEY = "bloqueio:ativo";
-const BIOMETRIC_CREDENTIAL_KEY = "bloqueio:credencialBiometrica";
+function pinHashKey(uid: string) {
+  return `bloqueio:${uid}:pinHash`;
+}
+function pinSaltKey(uid: string) {
+  return `bloqueio:${uid}:salt`;
+}
+function enabledKey(uid: string) {
+  return `bloqueio:${uid}:ativo`;
+}
+function biometricCredentialKey(uid: string) {
+  return `bloqueio:${uid}:credencialBiometrica`;
+}
 
 async function sha256Hex(text: string): Promise<string> {
   const data = new TextEncoder().encode(text);
@@ -44,19 +57,19 @@ function base64UrlToBuffer(base64Url: string): ArrayBuffer {
   return bytes.buffer;
 }
 
-export function isAppLockEnabled(): boolean {
+export function isAppLockEnabled(uid: string): boolean {
   if (typeof window === "undefined") return false;
   try {
-    return localStorage.getItem(ENABLED_KEY) === "1" && Boolean(localStorage.getItem(PIN_HASH_KEY));
+    return localStorage.getItem(enabledKey(uid)) === "1" && Boolean(localStorage.getItem(pinHashKey(uid)));
   } catch {
     return false;
   }
 }
 
-export function hasBiometricCredential(): boolean {
+export function hasBiometricCredential(uid: string): boolean {
   if (typeof window === "undefined") return false;
   try {
-    return Boolean(localStorage.getItem(BIOMETRIC_CREDENTIAL_KEY));
+    return Boolean(localStorage.getItem(biometricCredentialKey(uid)));
   } catch {
     return false;
   }
@@ -66,25 +79,25 @@ export function supportsBiometric(): boolean {
   return typeof window !== "undefined" && "PublicKeyCredential" in window;
 }
 
-export async function setAppLockPin(pin: string): Promise<void> {
+export async function setAppLockPin(uid: string, pin: string): Promise<void> {
   const salt = randomHex(16);
   const hash = await sha256Hex(salt + pin);
-  localStorage.setItem(PIN_SALT_KEY, salt);
-  localStorage.setItem(PIN_HASH_KEY, hash);
-  localStorage.setItem(ENABLED_KEY, "1");
+  localStorage.setItem(pinSaltKey(uid), salt);
+  localStorage.setItem(pinHashKey(uid), hash);
+  localStorage.setItem(enabledKey(uid), "1");
 }
 
-export function disableAppLock(): void {
-  localStorage.removeItem(PIN_HASH_KEY);
-  localStorage.removeItem(PIN_SALT_KEY);
-  localStorage.removeItem(ENABLED_KEY);
-  localStorage.removeItem(BIOMETRIC_CREDENTIAL_KEY);
+export function disableAppLock(uid: string): void {
+  localStorage.removeItem(pinHashKey(uid));
+  localStorage.removeItem(pinSaltKey(uid));
+  localStorage.removeItem(enabledKey(uid));
+  localStorage.removeItem(biometricCredentialKey(uid));
 }
 
-export async function verifyAppLockPin(pin: string): Promise<boolean> {
+export async function verifyAppLockPin(uid: string, pin: string): Promise<boolean> {
   try {
-    const salt = localStorage.getItem(PIN_SALT_KEY);
-    const storedHash = localStorage.getItem(PIN_HASH_KEY);
+    const salt = localStorage.getItem(pinSaltKey(uid));
+    const storedHash = localStorage.getItem(pinHashKey(uid));
     if (!salt || !storedHash) return false;
     const hash = await sha256Hex(salt + pin);
     return hash === storedHash;
@@ -93,7 +106,7 @@ export async function verifyAppLockPin(pin: string): Promise<boolean> {
   }
 }
 
-/** Registra um autenticador biométrico da plataforma pra este app, neste aparelho. */
+/** Registra um autenticador biométrico da plataforma pra este app, neste aparelho, vinculado a esta conta. */
 export async function registerBiometric(uid: string, label: string): Promise<boolean> {
   if (!supportsBiometric()) return false;
   try {
@@ -115,17 +128,17 @@ export async function registerBiometric(uid: string, label: string): Promise<boo
       },
     })) as PublicKeyCredential | null;
     if (!credential) return false;
-    localStorage.setItem(BIOMETRIC_CREDENTIAL_KEY, bufferToBase64Url(credential.rawId));
+    localStorage.setItem(biometricCredentialKey(uid), bufferToBase64Url(credential.rawId));
     return true;
   } catch {
     return false;
   }
 }
 
-/** Pede a biometria da plataforma; true só se o autenticador confirmar a identidade local. */
-export async function verifyBiometric(): Promise<boolean> {
+/** Pede a biometria da plataforma pra esta conta; true só se o autenticador confirmar a identidade local. */
+export async function verifyBiometric(uid: string): Promise<boolean> {
   if (!supportsBiometric()) return false;
-  const credentialIdB64 = localStorage.getItem(BIOMETRIC_CREDENTIAL_KEY);
+  const credentialIdB64 = localStorage.getItem(biometricCredentialKey(uid));
   if (!credentialIdB64) return false;
   try {
     const assertion = await navigator.credentials.get({

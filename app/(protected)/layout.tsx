@@ -24,10 +24,16 @@ export default function ProtectedLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  // Lido direto do localStorage no inicializador (não num efeito) — mesmo
-  // padrão já usado pro tema/visibilidade, seguro porque este layout só
-  // renderiza no cliente.
-  const [unlocked, setUnlocked] = useState(() => !isAppLockEnabled());
+  // O bloqueio é por conta (uid), não global — então só dá pra decidir se
+  // está travado depois que `user` resolve. Recalcula direto no corpo do
+  // render (não num efeito) sempre que o uid muda: é o padrão do próprio
+  // React pra "ajustar estado quando algo muda" sem flash — o React refaz
+  // esse render antes de pintar a tela, então nunca chega a mostrar o
+  // conteúdo (ou o cadeado da conta errada) por um instante sequer.
+  const [unlockState, setUnlockState] = useState<{ uid: string; unlocked: boolean } | null>(null);
+  if (user && unlockState?.uid !== user.uid) {
+    setUnlockState({ uid: user.uid, unlocked: !isAppLockEnabled(user.uid) });
+  }
 
   useEffect(() => {
     if (!loading && !user) {
@@ -35,15 +41,20 @@ export default function ProtectedLayout({
     }
   }, [loading, user, router]);
 
-  if (loading || !user) {
+  if (loading || !user || !unlockState || unlockState.uid !== user.uid) {
     return null;
   }
 
   // Enquanto travado, nem monta o resto da árvore (Dashboard, hooks do
   // Firestore, etc.) — além de simples, evita buscar dados financeiros antes
   // do PIN/biometria confirmar.
-  if (!unlocked) {
-    return <AppLockScreen onUnlock={() => setUnlocked(true)} />;
+  if (!unlockState.unlocked) {
+    return (
+      <AppLockScreen
+        uid={user.uid}
+        onUnlock={() => setUnlockState({ uid: user.uid, unlocked: true })}
+      />
+    );
   }
 
   return (
