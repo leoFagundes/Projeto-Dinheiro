@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { useTransactions } from "@/lib/use-transactions";
 import { useCategoryGoals } from "@/lib/use-category-goals";
 import { useCategories } from "@/lib/use-categories";
@@ -29,64 +27,26 @@ import { addMonthsToKey, currentMonthKey } from "@/lib/format";
 import { PageFade } from "@/app/_components/PageFade";
 import { DashboardSkeleton } from "@/app/_components/Skeleton";
 import { SummaryCards } from "./_components/SummaryCards";
-import { DashboardQuickNav } from "./_components/DashboardQuickNav";
 import { ActivitySection } from "./_components/ActivitySection";
 import { AnalisesCard } from "./_components/AnalisesCard";
 import { BankDebtSection } from "./_components/BankDebtSection";
 import { LoansSection } from "./_components/LoansSection";
 import { CategoryGoals } from "./_components/CategoryGoals";
-import { PocketsSection } from "./_components/PocketsSection";
-import { InvestmentsSection } from "./_components/InvestmentsSection";
-
-const MODO_DETALHADO_KEY = "modoDetalhado";
-
-function readModoDetalhado(): boolean {
-  if (typeof window === "undefined") return true;
-  try {
-    const saved = localStorage.getItem(MODO_DETALHADO_KEY);
-    return saved === null ? true : saved === "1";
-  } catch {
-    return true;
-  }
-}
 
 export default function DashboardPage() {
-  const {
-    transactions,
-    loading,
-    deleteTransaction,
-    payLoanInstallment,
-    undoLoanInstallmentPayment,
-  } = useTransactions();
+  const { transactions, loading, deleteTransaction, payLoanInstallment, undoLoanInstallmentPayment } =
+    useTransactions();
   const { goals, overrides: goalOverrides, setGoal, removeGoal, setGoalOverride, removeGoalOverride } =
     useCategoryGoals();
   const { categories } = useCategories();
   const { banks, payFatura, transferBetweenBanks } = useBanks();
   const { payments: bankPayments } = useBankPayments();
   const { transfers: bankTransfers } = useBankTransfers();
-  const { pockets, adjustSaldo, moveFunds, registrarRendimento, deletePocketMovement } = usePockets();
+  const { pockets } = usePockets();
   const { movements } = usePocketMovements();
-  const {
-    investments,
-    moveInvestment,
-    registrarRendimento: registrarRendimentoInvestimento,
-    deleteInvestmentMovement,
-  } = useInvestments();
+  const { investments } = useInvestments();
   const { movements: investmentMovements } = useInvestmentMovements();
   const { snapshots: patrimonioHistorico, syncSnapshot } = usePatrimonioHistory();
-  const [modoDetalhado, setModoDetalhado] = useState(readModoDetalhado);
-
-  function toggleModoDetalhado() {
-    setModoDetalhado((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(MODO_DETALHADO_KEY, next ? "1" : "0");
-      } catch {
-        // sem persistência, tudo bem
-      }
-      return next;
-    });
-  }
 
   const thisMonth = currentMonthKey();
   const patrimonio = computePatrimonio(
@@ -138,8 +98,6 @@ export default function DashboardPage() {
   const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
   const originDateById = computeOriginDateById(transactions);
   const visibleBanks = banks.filter((b) => !b.oculto);
-  const visiblePockets = pockets.filter((p) => !p.oculto);
-  const visibleInvestments = investments.filter((inv) => !inv.oculto);
   const loans = computeLoans(transactions);
   const saldoContaPorBanco = new Map(
     banks.map((b) => [
@@ -166,8 +124,6 @@ export default function DashboardPage() {
           saldoProjetadoMes={saldoProjetadoMes}
         />
 
-        <DashboardQuickNav />
-
         <ActivitySection
           upcomingEvents={upcomingEvents}
           transactions={transactions}
@@ -178,7 +134,7 @@ export default function DashboardPage() {
           originDateById={originDateById}
         />
 
-        <section id="bancos" className="scroll-mt-20">
+        <section>
           <h2 className="mb-3 text-sm font-medium text-ink-muted">Bancos</h2>
           <BankDebtSection
             banks={visibleBanks}
@@ -202,84 +158,31 @@ export default function DashboardPage() {
           onUndoPayment={undoLoanInstallmentPayment}
         />
 
-        {modoDetalhado && (
-          <section id="analises" className="scroll-mt-20">
-            <h2 className="mb-3 text-sm font-medium text-ink-muted">Análises</h2>
-            <AnalisesCard
-              transactions={transactions}
-              banks={banks}
-              patrimonioHistorico={patrimonioHistorico}
-              colorByCategoria={colorByCategoria}
-              iconByCategoria={iconByCategoria}
-              monthlyFlow={monthlyFlow}
-            />
-          </section>
-        )}
-
-        {modoDetalhado && (
-          <section id="metas" className="scroll-mt-20">
-            <h2 className="mb-3 text-sm font-medium text-ink-muted">Limite de gastos por categoria</h2>
-            <CategoryGoals
-              goals={goalsValidos}
-              overrides={goalOverridesValidos}
-              transactions={transactions}
-              iconByCategoria={iconByCategoria}
-              onSetGoal={setGoal}
-              onRemoveGoal={removeGoal}
-              onSetGoalOverride={setGoalOverride}
-              onRemoveGoalOverride={removeGoalOverride}
-            />
-          </section>
-        )}
-
-        <section id="caixinhas" className="scroll-mt-20">
-          <h2 className="mb-3 text-sm font-medium text-ink-muted">Caixinhas</h2>
-          <PocketsSection
-            pockets={visiblePockets}
+        <section>
+          <h2 className="mb-3 text-sm font-medium text-ink-muted">Análises</h2>
+          <AnalisesCard
+            transactions={transactions}
             banks={banks}
-            movements={movements}
-            onAdjust={adjustSaldo}
-            onMoveFunds={moveFunds}
-            onRegistrarRendimento={registrarRendimento}
-            onDeleteMovement={deletePocketMovement}
+            patrimonioHistorico={patrimonioHistorico}
+            colorByCategoria={colorByCategoria}
+            iconByCategoria={iconByCategoria}
+            monthlyFlow={monthlyFlow}
           />
         </section>
 
-        {modoDetalhado && (
-          <section id="investimentos" className="scroll-mt-20">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-medium text-ink-muted">Investimentos</h2>
-              <Link href="/investimentos" className="text-xs text-accent-strong hover:underline">
-                Ver tudo
-              </Link>
-            </div>
-            <InvestmentsSection
-              investments={visibleInvestments}
-              movements={investmentMovements}
-              banks={banks}
-              onMove={moveInvestment}
-              onRegistrarRendimento={registrarRendimentoInvestimento}
-              onDeleteMovement={deleteInvestmentMovement}
-            />
-          </section>
-        )}
-
-        <button
-          onClick={toggleModoDetalhado}
-          className="flex items-center justify-center gap-1.5 self-center text-sm text-ink-muted transition-transform active:scale-95 hover:text-ink"
-        >
-          {modoDetalhado ? (
-            <>
-              <ChevronUp size={16} />
-              Mostrar menos
-            </>
-          ) : (
-            <>
-              <ChevronDown size={16} />
-              Mostrar investimentos, análises e metas
-            </>
-          )}
-        </button>
+        <section>
+          <h2 className="mb-3 text-sm font-medium text-ink-muted">Limite de gastos por categoria</h2>
+          <CategoryGoals
+            goals={goalsValidos}
+            overrides={goalOverridesValidos}
+            transactions={transactions}
+            iconByCategoria={iconByCategoria}
+            onSetGoal={setGoal}
+            onRemoveGoal={removeGoal}
+            onSetGoalOverride={setGoalOverride}
+            onRemoveGoalOverride={removeGoalOverride}
+          />
+        </section>
       </div>
     </PageFade>
   );

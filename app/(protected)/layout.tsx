@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
-import { Eye, EyeOff, HelpCircle, LogOut } from "lucide-react";
+import Link from "next/link";
+import { AnimatePresence, motion } from "motion/react";
+import { Eye, EyeOff, HelpCircle, Menu } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { VisibilityProvider, useValuesVisibility } from "@/lib/visibility-context";
-import { BottomNav } from "@/app/_components/BottomNav";
+import { NavDrawer } from "@/app/_components/NavDrawer";
+import { Sidebar } from "@/app/_components/Sidebar";
 import { AddTransactionButton } from "@/app/_components/AddTransactionButton";
 import { HelpModal } from "@/app/_components/HelpModal";
 
@@ -15,8 +18,10 @@ export default function ProtectedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, nickname, loading, signOut } = useAuth();
+  const { user, nickname, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -30,43 +35,62 @@ export default function ProtectedLayout({
 
   return (
     <VisibilityProvider>
-      <div className="flex min-h-screen flex-col">
-        <header className="sticky top-0 z-20 flex justify-center border-b border-border bg-surface/95 backdrop-blur">
-          <div className="flex w-full max-w-md items-center justify-between px-5 py-4">
-            <div className="flex items-center gap-2">
-              <Image
-                src="/logo.svg"
-                alt=""
-                width={28}
-                height={28}
-                className="rounded-lg shadow-sm ring-1 ring-black/5"
-                unoptimized
-              />
-              <span>
-                <p className="font-semibold leading-tight">Projeto Dinheiro</p>
-                {nickname && <p className="text-xs leading-tight text-ink-muted">{nickname}</p>}
-              </span>
+      <div className="flex min-h-screen">
+        <Sidebar />
+
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+          <header
+            className="sticky top-0 z-20 flex justify-center border-b border-border bg-surface/95 backdrop-blur"
+            style={{ paddingTop: "env(safe-area-inset-top)" }}
+          >
+            <div className="flex w-full max-w-md items-center justify-between px-5 py-4 md:max-w-2xl">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setDrawerOpen(true)}
+                  aria-label="Abrir menu"
+                  className="text-ink-muted transition-transform active:scale-90 hover:text-ink md:hidden"
+                >
+                  <Menu size={20} />
+                </button>
+                <Link href="/" className="flex items-center gap-2 md:hidden">
+                  <Image
+                    src="/logo.svg"
+                    alt=""
+                    width={28}
+                    height={28}
+                    className="rounded-lg shadow-sm ring-1 ring-black/5"
+                    unoptimized
+                  />
+                  <span>
+                    <p className="font-semibold leading-tight">Projeto Dinheiro</p>
+                    {nickname && <p className="text-xs leading-tight text-ink-muted">{nickname}</p>}
+                  </span>
+                </Link>
+                {nickname && <p className="hidden text-sm text-ink-muted md:block">Olá, {nickname}</p>}
+              </div>
+              <div className="flex items-center gap-3">
+                <VisibilityToggleButton />
+                <HelpButton />
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <VisibilityToggleButton />
-              <HelpButton />
-              <button
-                onClick={() => signOut()}
-                aria-label="Sair"
-                className="text-ink-muted hover:text-ink"
+          </header>
+
+          <main className="mx-auto w-full min-w-0 max-w-md flex-1 px-5 py-6 md:max-w-2xl">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={pathname}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="min-w-0"
               >
-                <LogOut size={18} />
-              </button>
-            </div>
-          </div>
-        </header>
+                {children}
+              </motion.div>
+            </AnimatePresence>
+          </main>
 
-        <main className="mx-auto w-full max-w-md flex-1 px-5 py-6">
-          {children}
-        </main>
-
-        <AddTransactionButton />
-        <BottomNav />
+          <AddTransactionButton />
+          <NavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+        </div>
       </div>
     </VisibilityProvider>
   );

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "motion/react";
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -10,6 +10,8 @@ import { TransactionFormSheet } from "./TransactionFormSheet";
 import { categoryKey, FALLBACK_CATEGORY_COLOR, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { formatDate } from "@/lib/format";
 import type { Transaction } from "@/lib/types";
+
+const UNDO_WINDOW_MS = 5000;
 
 export function TransactionListItem({
   transaction,
@@ -35,6 +37,8 @@ export function TransactionListItem({
   const [confirming, setConfirming] = useState(false);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(false);
+  const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const signedValue =
     transaction.tipo === "receita" ? transaction.valor : -transaction.valor;
   const categoriaKey = categoryKey(transaction.tipo, transaction.categoria);
@@ -45,6 +49,23 @@ export function TransactionListItem({
   const origemData = transaction.recorrenteOrigemId
     ? originDateById?.get(transaction.recorrenteOrigemId)
     : undefined;
+  // Parcela, assinatura e empréstimo têm efeitos colaterais que vale
+  // confirmar antes de excluir; uma despesa/receita avulsa é de baixo risco
+  // (fácil de recriar), então usa "desfazer" em vez de travar com um diálogo.
+  const isSimple =
+    !transaction.parcelaTotal &&
+    !transaction.recorrente &&
+    !transaction.recorrenteOrigemId &&
+    !transaction.emprestimoId;
+
+  // Se o item sair da tela (ex: navegou pra outra página) antes da janela de
+  // desfazer acabar, cancela a exclusão agendada em vez de deixá-la rodar às
+  // escondidas sem ninguém poder desfazer.
+  useEffect(() => {
+    return () => {
+      if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    };
+  }, []);
 
   async function handleConfirmDelete() {
     setDeleting(true);
@@ -59,62 +80,88 @@ export function TransactionListItem({
     }
   }
 
+  function handleSimpleDelete() {
+    setPendingDelete(true);
+    toast(`"${transaction.descricao}" excluída`, {
+      duration: UNDO_WINDOW_MS,
+      action: {
+        label: "Desfazer",
+        onClick: () => {
+          if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+          setPendingDelete(false);
+        },
+      },
+    });
+    undoTimeoutRef.current = setTimeout(async () => {
+      try {
+        await onDelete(transaction.id);
+      } catch {
+        toast.error("Não foi possível excluir.");
+        setPendingDelete(false);
+      }
+    }, UNDO_WINDOW_MS);
+  }
+
   return (
     <>
-      <motion.div
-        layout
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96 }}
-        transition={{ duration: 0.18 }}
-      >
-        <div className="flex items-center justify-between gap-3 rounded-card bg-surface shadow-card px-4 py-3">
-          <button
-            onClick={() => setEditing(true)}
-            aria-label="Editar transação"
-            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+      <AnimatePresence>
+        {!pendingDelete && (
+          <motion.div
+            layout
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ duration: 0.18 }}
           >
-            <span
-              className="flex size-9 shrink-0 items-center justify-center rounded-full text-base"
-              style={{ backgroundColor: `${categoriaColor}22` }}
-            >
-              {categoriaIcon}
-            </span>
-            <span className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{transaction.descricao}</p>
-              <p className="flex flex-wrap items-center gap-1 text-xs text-ink-muted">
-                {transaction.categoria} · {formatDate(transaction.data)}
-                {isRecorrenteOriginal ? " · assinatura (original)" : ""}
-                {transaction.recorrenteOrigemId
-                  ? ` · assinatura${origemData ? ` desde ${formatDate(origemData)}` : ""}`
-                  : ""}
-                {transaction.parcelaTotal
-                  ? ` · parcela ${transaction.parcelaAtual}/${transaction.parcelaTotal}`
-                  : ""}
-                {transaction.emprestimoId ? " · empréstimo" : ""}
-                {bancoNome && (
-                  <span className="rounded-full bg-bg px-1.5 py-0.5 text-[11px]">
-                    {bancoNome}
-                    {transaction.formaPagamento === "debito" ? " · débito" : ""}
-                  </span>
-                )}
-              </p>
-            </span>
-            <Pencil size={13} className="shrink-0 text-ink-muted/50" />
-          </button>
-          <div className="flex shrink-0 items-center gap-3">
-            <Money value={signedValue} showSign className="text-sm font-medium" />
-            <button
-              onClick={() => setConfirming(true)}
-              disabled={deleting}
-              aria-label="Excluir transação"
-              className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        </div>
-      </motion.div>
+            <div className="flex items-center justify-between gap-3 rounded-card bg-surface shadow-card px-4 py-3">
+              <button
+                onClick={() => setEditing(true)}
+                aria-label="Editar transação"
+                className="flex min-w-0 flex-1 items-center gap-3 text-left"
+              >
+                <span
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full text-base"
+                  style={{ backgroundColor: `${categoriaColor}22` }}
+                >
+                  {categoriaIcon}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{transaction.descricao}</p>
+                  <p className="flex flex-wrap items-center gap-1 text-xs text-ink-muted">
+                    {transaction.categoria} · {formatDate(transaction.data)}
+                    {isRecorrenteOriginal ? " · assinatura (original)" : ""}
+                    {transaction.recorrenteOrigemId
+                      ? ` · assinatura${origemData ? ` desde ${formatDate(origemData)}` : ""}`
+                      : ""}
+                    {transaction.parcelaTotal
+                      ? ` · parcela ${transaction.parcelaAtual}/${transaction.parcelaTotal}`
+                      : ""}
+                    {transaction.emprestimoId ? " · empréstimo" : ""}
+                    {bancoNome && (
+                      <span className="rounded-full bg-bg px-1.5 py-0.5 text-[11px]">
+                        {bancoNome}
+                        {transaction.formaPagamento === "debito" ? " · débito" : ""}
+                      </span>
+                    )}
+                  </p>
+                </span>
+                <Pencil size={13} className="shrink-0 text-ink-muted/50" />
+              </button>
+              <div className="flex shrink-0 items-center gap-3">
+                <Money value={signedValue} showSign className="text-sm font-medium" />
+                <button
+                  onClick={() => (isSimple ? handleSimpleDelete() : setConfirming(true))}
+                  disabled={deleting}
+                  aria-label="Excluir transação"
+                  className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <TransactionFormSheet
         open={editing}

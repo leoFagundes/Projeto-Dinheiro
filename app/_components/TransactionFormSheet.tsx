@@ -7,11 +7,13 @@ import Link from "next/link";
 import { useTransactions } from "@/lib/use-transactions";
 import { useCategories } from "@/lib/use-categories";
 import { useBanks } from "@/lib/use-banks";
+import { useSeenFeature } from "@/lib/use-seen-feature";
 import { formatCurrency, todayIsoDate } from "@/lib/format";
 import { FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { BottomSheet } from "./BottomSheet";
 import { CurrencyInput } from "./CurrencyInput";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { NewBadge } from "./NewBadge";
 import type { FormaPagamento, Transaction, TransactionType } from "@/lib/types";
 
 export function TransactionFormSheet({
@@ -51,6 +53,7 @@ function TransactionFormFields({
   } = useTransactions();
   const { byType: categoriesByType } = useCategories();
   const { banks } = useBanks();
+  const { seen: seenEmprestimo, markSeen: markEmprestimoSeen } = useSeenFeature("aba-emprestimo");
   const [submitting, setSubmitting] = useState(false);
   const [confirmingCancelParcelas, setConfirmingCancelParcelas] = useState(false);
 
@@ -114,8 +117,9 @@ function TransactionFormFields({
   function changeModo(next: TransactionType | "emprestimo") {
     setModo(next);
     if (next !== "despesa") setParcelar(false);
-    if (next === "emprestimo" && !bancoId && banks.length > 0) {
-      setBancoId(banks[0].id);
+    if (next === "emprestimo") {
+      markEmprestimoSeen();
+      if (!bancoId && banks.length > 0) setBancoId(banks[0].id);
     }
   }
 
@@ -298,13 +302,14 @@ function TransactionFormFields({
             <button
               type="button"
               onClick={() => changeModo("emprestimo")}
-              className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+              className={`relative rounded-2xl border px-4 py-2.5 text-sm font-medium transition-colors ${
                 modo === "emprestimo"
                   ? "border-accent bg-accent-soft text-accent-strong"
                   : "border-border text-ink-muted"
               }`}
             >
               Empréstimo
+              {!seenEmprestimo && <NewBadge />}
             </button>
           )}
         </div>

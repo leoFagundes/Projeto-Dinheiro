@@ -14,7 +14,8 @@ export function AddTransactionButton() {
         onClick={() => setOpen(true)}
         aria-label="Adicionar transação"
         whileTap={{ scale: 0.92 }}
-        className="fixed bottom-20 right-5 z-30 flex size-14 items-center justify-center rounded-full bg-accent text-white shadow-lg transition-colors hover:bg-accent-strong"
+        className="fixed right-5 z-30 flex size-14 items-center justify-center rounded-full bg-accent text-white shadow-lg transition-colors hover:bg-accent-strong"
+        style={{ bottom: "max(1.5rem, calc(env(safe-area-inset-bottom) + 0.75rem))" }}
       >
         <Plus size={26} />
       </motion.button>

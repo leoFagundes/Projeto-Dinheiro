@@ -1,14 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { HandCoins, Undo2 } from "lucide-react";
+import confetti from "canvas-confetti";
+import { Check, HandCoins, Undo2 } from "lucide-react";
 import { BottomSheet } from "@/app/_components/BottomSheet";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import { Money, MaskedCurrency } from "@/app/_components/Money";
 import { formatDate, todayIsoDate } from "@/lib/format";
 import type { LoanSummary } from "@/lib/derived";
 import type { Transaction } from "@/lib/types";
+
+function isQuitado(loan: LoanSummary): boolean {
+  return loan.parcelasTotal > 0 && loan.parcelasPagas === loan.parcelasTotal;
+}
 
 type PayInstallment = (parcelaId: string, valor: number, data: string) => Promise<void>;
 type UndoPayment = (parcela: Transaction) => Promise<void>;
@@ -31,6 +36,24 @@ export function LoansSection({
   // resumo na hora, sem o modal ficar preso numa cópia antiga.
   const selected = loans.find((loan) => loan.id === selectedId) ?? null;
 
+  // Confete só quando um empréstimo vira quitado NESTA sessão — sem essa
+  // referência, todo empréstimo que já estava quitado dispararia confete de
+  // novo a cada vez que o Dashboard recarrega.
+  const celebratedRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (celebratedRef.current === null) {
+      celebratedRef.current = new Set(loans.filter(isQuitado).map((l) => l.id));
+      return;
+    }
+    for (const loan of loans) {
+      if (isQuitado(loan) && !celebratedRef.current.has(loan.id)) {
+        celebratedRef.current.add(loan.id);
+        confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+        toast.success(`"${loan.descricao}" foi totalmente quitado! 🎉`);
+      }
+    }
+  }, [loans]);
+
   if (loans.length === 0) return null;
 
   return (
@@ -43,11 +66,14 @@ export function LoansSection({
               ? Math.min((loan.totalPago / loan.valorTotalPagar) * 100, 100)
               : 0;
           const bancoNome = loan.bancoId ? bankNameById.get(loan.bancoId) : undefined;
+          const quitado = isQuitado(loan);
           return (
             <li key={loan.id}>
               <button
                 onClick={() => setSelectedId(loan.id)}
-                className="w-full rounded-card bg-surface shadow-card p-4 text-left transition-transform active:scale-[0.98]"
+                className={`w-full rounded-card p-4 text-left shadow-card transition-transform active:scale-[0.98] ${
+                  quitado ? "border border-accent bg-accent-soft" : "bg-surface"
+                }`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-2">
@@ -62,17 +88,26 @@ export function LoansSection({
                       </span>
                     </span>
                   </span>
-                  <span className="shrink-0 text-right">
-                    <MaskedCurrency value={loan.restante} className="block text-sm font-medium text-negative" />
-                    <span className="block text-[11px] text-ink-muted">restante</span>
-                  </span>
+                  {quitado ? (
+                    <span className="flex shrink-0 items-center gap-1 text-sm font-medium text-accent-strong">
+                      <Check size={14} />
+                      Quitado
+                    </span>
+                  ) : (
+                    <span className="shrink-0 text-right">
+                      <MaskedCurrency value={loan.restante} className="block text-sm font-medium text-negative" />
+                      <span className="block text-[11px] text-ink-muted">restante</span>
+                    </span>
+                  )}
                 </div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg">
-                  <div
-                    className="h-full rounded-full bg-accent transition-all duration-500 ease-out"
-                    style={{ width: `${percent}%` }}
-                  />
-                </div>
+                {!quitado && (
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg">
+                    <div
+                      className="h-full rounded-full bg-accent transition-all duration-500 ease-out"
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                )}
               </button>
             </li>
           );

@@ -140,7 +140,7 @@ export function BankDebtSection({
 
       <div className="flex items-center gap-4">
         <Link
-          href="/configuracoes#bancos"
+          href="/bancos"
           className="text-sm text-accent-strong transition-transform active:scale-95 hover:underline"
         >
           Gerenciar bancos
