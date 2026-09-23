@@ -27,7 +27,7 @@ export function BottomSheet({
         >
           <motion.div
             onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-md rounded-t-3xl bg-surface p-6 sm:rounded-card"
+            className="max-h-[85dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl bg-surface p-6 sm:rounded-card"
             initial={{ y: "100%", opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0 }}

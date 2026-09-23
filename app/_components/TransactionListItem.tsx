@@ -91,6 +91,7 @@ export function TransactionListItem({
                 {transaction.parcelaTotal
                   ? ` · parcela ${transaction.parcelaAtual}/${transaction.parcelaTotal}`
                   : ""}
+                {transaction.emprestimoId ? " · empréstimo" : ""}
                 {bancoNome && (
                   <span className="rounded-full bg-bg px-1.5 py-0.5 text-[11px]">
                     {bancoNome}

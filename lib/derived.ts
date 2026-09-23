@@ -50,6 +50,86 @@ export function computeOriginDateById(transactions: Transaction[]): Map<string, 
   );
 }
 
+export type LoanSummary = {
+  /** Mesmo id compartilhado pela receita (se existir) e por todas as parcelas (ver `addLoan`). */
+  id: string;
+  descricao: string;
+  categoria: string;
+  bancoId?: string;
+  /**
+   * Ausente quando a receita do valor recebido foi excluída (ex: dinheiro já
+   * usado antes de começar a usar o app, sem sentido contar como entrada
+   * nova) — o empréstimo continua existindo e sendo pago normalmente, só sem
+   * esse dado pra mostrar.
+   */
+  valorRecebido?: number;
+  dataRecebimento?: string;
+  /** Soma do combinado originalmente (`valorOriginal`) de todas as parcelas — referência fixa, nunca muda. */
+  valorTotalPagar: number;
+  /** Soma do que realmente já saiu da conta (parcelas com `data` <= hoje, no valor atual delas). */
+  totalPago: number;
+  /** Soma do combinado (`valorOriginal`) das parcelas ainda não pagas. */
+  restante: number;
+  /** valorOriginal - valor de cada parcela já paga, somado — positivo é economia líquida, negativo é custo extra (multa/juros). */
+  economiaTotal: number;
+  parcelasPagas: number;
+  parcelasTotal: number;
+  parcelas: Transaction[];
+};
+
+/**
+ * Reconstrói cada empréstimo a partir das transações que o compõem, ligadas
+ * por `emprestimoId` — sem precisar de uma coleção separada. Âncora é sempre
+ * uma parcela (nunca a receita): se o usuário excluir a receita do valor
+ * recebido (ex: dinheiro que já tinha sido usado antes do app, e por isso não
+ * devia contar como entrada nova), o empréstimo continua aparecendo normal,
+ * só sem o dado de "quanto/quando recebeu". Uma parcela conta como paga
+ * quando sua `data` atual já passou (mesmo critério que computeBankSaldoConta
+ * usa pra descontar do saldo em conta), então pagar antecipado ou atrasado —
+ * com um valor diferente do combinado — já reflete aqui automaticamente.
+ */
+export function computeLoans(transactions: Transaction[]): LoanSummary[] {
+  const hoje = todayIsoDate();
+  const emprestimoIds = new Set(
+    transactions
+      .filter((t) => t.tipo === "despesa" && t.emprestimoId)
+      .map((t) => t.emprestimoId as string),
+  );
+
+  return Array.from(emprestimoIds)
+    .map((emprestimoId): LoanSummary => {
+      const parcelas = transactions
+        .filter((t) => t.emprestimoId === emprestimoId && t.tipo === "despesa")
+        .sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0));
+      const receita = transactions.find(
+        (t) => t.emprestimoId === emprestimoId && t.tipo === "receita",
+      );
+      const pagas = parcelas.filter((p) => p.data <= hoje);
+      const naoPagas = parcelas.filter((p) => p.data > hoje);
+
+      return {
+        id: emprestimoId,
+        descricao: parcelas[0]?.descricao ?? "Empréstimo",
+        categoria: parcelas[0]?.categoria ?? "",
+        bancoId: receita?.bancoId ?? parcelas[0]?.bancoId,
+        valorRecebido: receita?.valor,
+        dataRecebimento: receita?.data,
+        valorTotalPagar: parcelas.reduce((sum, p) => sum + (p.valorOriginal ?? p.valor), 0),
+        totalPago: pagas.reduce((sum, p) => sum + p.valor, 0),
+        restante: naoPagas.reduce((sum, p) => sum + (p.valorOriginal ?? p.valor), 0),
+        economiaTotal: pagas.reduce((sum, p) => sum + ((p.valorOriginal ?? p.valor) - p.valor), 0),
+        parcelasPagas: pagas.length,
+        parcelasTotal: parcelas.length,
+        parcelas,
+      };
+    })
+    .sort((a, b) => {
+      const dataA = a.dataRecebimento ?? a.parcelas[0]?.dataVencimento ?? "";
+      const dataB = b.dataRecebimento ?? b.parcelas[0]?.dataVencimento ?? "";
+      return dataA < dataB ? 1 : -1;
+    });
+}
+
 /**
  * Assinaturas/recorrências ativas: templates que ainda estão gerando (ou vão
  * gerar) transação todo mês — exclui instâncias já geradas (só o template

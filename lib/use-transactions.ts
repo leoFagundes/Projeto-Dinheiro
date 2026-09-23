@@ -135,7 +135,9 @@ export function useTransactions() {
    * — datas diferentes de propósito, já que o dinheiro costuma cair antes do
    * vencimento da primeira cobrança. Cada parcela só desconta da conta no
    * próprio dia (ver computeBankSaldoConta), então dá pra planejar deixando o
-   * dinheiro reservado antes de cada cobrança chegar.
+   * dinheiro reservado antes de cada cobrança chegar. Receita e parcelas
+   * compartilham `emprestimoId`, o que permite reconstruir o empréstimo
+   * inteiro (ver computeLoans) sem precisar de uma coleção separada.
    */
   const addLoan = useCallback(
     async (
@@ -152,7 +154,7 @@ export function useTransactions() {
     ) => {
       if (!user) return;
       const valores = splitInstallments(input.valorTotalPagar, numParcelas);
-      const compraId = crypto.randomUUID();
+      const emprestimoId = crypto.randomUUID();
       const baseMonth = monthKeyOfIsoDate(input.dataPrimeiraParcela);
       const originalDay = Number(input.dataPrimeiraParcela.slice(8, 10));
 
@@ -165,6 +167,7 @@ export function useTransactions() {
         data: input.dataRecebimento,
         recorrente: false,
         bancoId: input.bancoId,
+        emprestimoId,
         criadoEm: Date.now(),
       });
 
@@ -172,19 +175,23 @@ export function useTransactions() {
         valores.map((valor, index) => {
           const monthKey = addMonthsToKey(baseMonth, index);
           const day = clampDayToMonth(monthKey, originalDay);
+          const data = `${monthKey}-${day}`;
           return addDoc(collection(db, COLLECTION), {
             userId: user.uid,
             valor,
             tipo: "despesa" as const,
             categoria: input.categoria,
             descricao: input.descricao,
-            data: `${monthKey}-${day}`,
+            data,
             recorrente: false,
             bancoId: input.bancoId,
             formaPagamento: "debito" as const,
-            compraId,
+            compraId: emprestimoId,
             parcelaAtual: index + 1,
             parcelaTotal: numParcelas,
+            emprestimoId,
+            valorOriginal: valor,
+            dataVencimento: data,
             criadoEm: Date.now(),
           });
         }),
@@ -223,6 +230,29 @@ export function useTransactions() {
     },
     [transactions],
   );
+
+  /**
+   * Registra o pagamento de uma parcela de empréstimo com o valor/data reais
+   * — pode ser diferente do combinado (pagar antes costuma sair mais barato,
+   * pagar depois mais caro com multa/juros). `valorOriginal`/`dataVencimento`
+   * da parcela não mudam, só `valor`/`data` (o que efetivamente sai da conta
+   * e quando), que é o que computeBankSaldoConta e o resto do app já leem.
+   */
+  const payLoanInstallment = useCallback(
+    async (parcelaId: string, valorPago: number, dataPagamento: string) => {
+      await updateDoc(doc(db, COLLECTION, parcelaId), { valor: valorPago, data: dataPagamento });
+    },
+    [],
+  );
+
+  /** Desfaz o pagamento registrado, voltando a parcela pro valor/data combinados. */
+  const undoLoanInstallmentPayment = useCallback(async (parcela: Transaction) => {
+    if (parcela.valorOriginal === undefined || parcela.dataVencimento === undefined) return;
+    await updateDoc(doc(db, COLLECTION, parcela.id), {
+      valor: parcela.valorOriginal,
+      data: parcela.dataVencimento,
+    });
+  }, []);
 
   // O app não tem backend agendado, então cada template recorrente ganha sua
   // instância do mês atual assim que o usuário abre o app, uma vez por sessão.
@@ -285,5 +315,7 @@ export function useTransactions() {
     updateTransaction,
     deleteTransaction,
     cancelRemainingInstallments,
+    payLoanInstallment,
+    undoLoanInstallmentPayment,
   };
 }

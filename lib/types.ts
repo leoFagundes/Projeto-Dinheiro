@@ -22,10 +22,26 @@ export type Transaction = {
   bancoId?: string;
   /** Crédito conta na fatura do banco; débito é pagamento imediato e não conta. Padrão: crédito. */
   formaPagamento?: FormaPagamento;
-  /** Agrupa todas as parcelas de uma mesma compra parcelada */
+  /** Agrupa todas as parcelas de uma mesma compra parcelada (ou empréstimo, ver `emprestimoId`) */
   compraId?: string;
   parcelaAtual?: number;
   parcelaTotal?: number;
+  /**
+   * Vincula a receita do valor recebido e todas as parcelas de um mesmo
+   * empréstimo (ver `addLoan`) — mesmo id nos dois lados, permite reconstruir
+   * o empréstimo inteiro a partir das transações, sem coleção separada.
+   */
+  emprestimoId?: string;
+  /**
+   * Valor/data originalmente combinados pra esta parcela, congelados na
+   * criação. `valor`/`data` continuam sendo o estado atual (o que realmente
+   * vai sair da conta e quando) — pagar antes ou depois do previsto, por um
+   * valor diferente (desconto/multa), edita só `valor`/`data`; comparar com
+   * `valorOriginal`/`dataVencimento` é o que mostra "economizou/pagou a mais".
+   * Uma parcela é considerada paga quando `data` (o estado atual) já passou.
+   */
+  valorOriginal?: number;
+  dataVencimento?: string;
   criadoEm: number;
 };
 

@@ -17,6 +17,7 @@ import { usePatrimonioHistory } from "@/lib/use-patrimonio-history";
 import { assignCategoryColors, mapCategoryIcons } from "@/lib/categories";
 import {
   computeBankSaldoConta,
+  computeLoans,
   computeMonthlyFlowTrend,
   computeMonthTotals,
   computeOriginDateById,
@@ -32,6 +33,7 @@ import { DashboardQuickNav } from "./_components/DashboardQuickNav";
 import { ActivitySection } from "./_components/ActivitySection";
 import { AnalisesCard } from "./_components/AnalisesCard";
 import { BankDebtSection } from "./_components/BankDebtSection";
+import { LoansSection } from "./_components/LoansSection";
 import { CategoryGoals } from "./_components/CategoryGoals";
 import { PocketsSection } from "./_components/PocketsSection";
 import { InvestmentsSection } from "./_components/InvestmentsSection";
@@ -49,7 +51,13 @@ function readModoDetalhado(): boolean {
 }
 
 export default function DashboardPage() {
-  const { transactions, loading, deleteTransaction } = useTransactions();
+  const {
+    transactions,
+    loading,
+    deleteTransaction,
+    payLoanInstallment,
+    undoLoanInstallmentPayment,
+  } = useTransactions();
   const { goals, overrides: goalOverrides, setGoal, removeGoal, setGoalOverride, removeGoalOverride } =
     useCategoryGoals();
   const { categories } = useCategories();
@@ -132,6 +140,7 @@ export default function DashboardPage() {
   const visibleBanks = banks.filter((b) => !b.oculto);
   const visiblePockets = pockets.filter((p) => !p.oculto);
   const visibleInvestments = investments.filter((inv) => !inv.oculto);
+  const loans = computeLoans(transactions);
   const saldoContaPorBanco = new Map(
     banks.map((b) => [
       b.id,
@@ -185,6 +194,13 @@ export default function DashboardPage() {
             bankNameById={bankNameById}
           />
         </section>
+
+        <LoansSection
+          loans={loans}
+          bankNameById={bankNameById}
+          onPayInstallment={payLoanInstallment}
+          onUndoPayment={undoLoanInstallmentPayment}
+        />
 
         {modoDetalhado && (
           <section id="analises" className="scroll-mt-20">

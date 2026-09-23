@@ -26,7 +26,7 @@ const TABS: HelpTab[] = [
       {
         titulo: "O painel principal",
         texto:
-          'O Patrimônio é tudo que você tem (contas + caixinhas + investimentos) menos o que você deve (fatura + saldo anterior). "Livres depois de pagar as faturas" é só o dinheiro em conta descontando as faturas — o que sobra de verdade pra gastar. "Saldo projetado do mês" soma o que já entrou/saiu com o que ainda está previsto até o fim do mês.',
+          'O Patrimônio é tudo que você tem (contas + caixinhas + investimentos) menos o que você deve (fatura + saldo anterior). "Livres depois de pagar as faturas" é só o dinheiro em conta descontando as faturas — o que sobra de verdade pra gastar. "Saldo projetado do mês" soma o que já entrou/saiu com o que ainda está previsto até o fim do mês. Logo abaixo, "Próximos 7 dias" e "Últimas transações" dividem o mesmo espaço em abas — toque pra trocar. Se você tiver algum empréstimo ativo, uma seção "Empréstimos" aparece automaticamente entre Bancos e Análises.',
         imagem: "/images/examples/tutorial-01-dashboard.png",
       },
     ],
@@ -62,14 +62,32 @@ const TABS: HelpTab[] = [
       {
         titulo: "Bancos no Dashboard",
         texto:
-          "Cada banco mostra o saldo em conta (o que tem disponível) e a fatura do mês (o que já foi gasto no crédito e ainda não foi pago). Use as setinhas pra ver a fatura de meses passados ou futuros — útil pra conferir compras parceladas que ainda vão chegar.",
+          "Cada banco mostra o saldo em conta (o que tem disponível) e a fatura do mês (o que já foi gasto no crédito e ainda não foi pago). Use as setinhas pra ver a fatura de meses passados ou futuros — útil pra conferir compras parceladas que ainda vão chegar. Toque no valor da fatura pra abrir todos os itens dela num modal — dá pra editar ou excluir qualquer um ali mesmo, sem sair da tela.",
         imagem: "/images/examples/tutorial-05-bancos-dashboard.png",
       },
       {
         titulo: "Corrigindo saldo e fatura na mão",
         texto:
-          "Se o app não bateu com a realidade, edite o banco em Configurações e digite o valor que está certo HOJE nesses três campos. O app calcula a diferença sozinho e ajusta por trás — nunca duplica nem apaga nada do que já foi rastreado.",
+          'Se o app não bateu com a realidade, edite o banco em Configurações e digite o valor que está certo HOJE nesses três campos. O app calcula a diferença sozinho e ajusta por trás — nunca duplica nem apaga nada do que já foi rastreado. O campo "Dia de fechamento da fatura" (opcional) faz compras no crédito feitas depois desse dia caírem automaticamente na fatura do mês seguinte, em vez do mês corrente — inclusive pra compras já lançadas antes de configurar.',
         imagem: "/images/examples/tutorial-06-banco-editar.png",
+      },
+    ],
+  },
+  {
+    id: "emprestimos",
+    label: "Empréstimos",
+    sections: [
+      {
+        titulo: "Registrando um empréstimo",
+        texto:
+          'Ao criar uma transação, a aba "Empréstimo" (ao lado de Despesa/Receita) pede o valor que você vai receber, a data em que ele cai na conta, o valor total a pagar (com juros, se houver), em quantas vezes e a data da 1ª parcela. O app lança a receita do valor recebido e todas as parcelas de uma vez — sempre no débito, pra cada uma só sair da conta no dia dela.',
+        imagem: "/images/examples/tutorial-13-emprestimo-criar.png",
+      },
+      {
+        titulo: "Acompanhando e pagando parcelas",
+        texto:
+          'Se você tem algum empréstimo, uma seção "Empréstimos" aparece na tela inicial com o progresso de cada um. Toque pra abrir todas as parcelas e pagar qualquer uma, em qualquer ordem — se pagar antes do combinado pode sair mais barato, se pagar depois pode vir com multa/juros, então o valor e a data são editáveis na hora de confirmar o pagamento. Dá pra desfazer um pagamento registrado errado a qualquer momento.',
+        imagem: "/images/examples/tutorial-14-emprestimos-dashboard.png",
       },
     ],
   },
