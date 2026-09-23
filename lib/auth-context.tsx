@@ -1,9 +1,13 @@
 "use client";
 
 import {
+  EmailAuthProvider,
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
+  deleteUser,
   onAuthStateChanged,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -25,6 +29,11 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updateNickname: (nickname: string) => Promise<void>;
+  /** true quando o login foi feito com e-mail/senha (tem senha pra trocar); false pra login só via Google. */
+  hasPasswordProvider: boolean;
+  reauthenticateWithPassword: (password: string) => Promise<void>;
+  reauthenticateWithGoogle: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -66,6 +75,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const trimmed = value.trim();
       await updateProfile(auth.currentUser, { displayName: trimmed || null });
       setNickname(trimmed || null);
+    },
+    hasPasswordProvider: user?.providerData.some((p) => p.providerId === "password") ?? false,
+    reauthenticateWithPassword: async (password) => {
+      if (!auth.currentUser?.email) return;
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
+      await reauthenticateWithCredential(auth.currentUser, credential);
+    },
+    reauthenticateWithGoogle: async () => {
+      if (!auth.currentUser) return;
+      await reauthenticateWithPopup(auth.currentUser, new GoogleAuthProvider());
+    },
+    deleteAccount: async () => {
+      if (!auth.currentUser) return;
+      await deleteUser(auth.currentUser);
     },
   };
 

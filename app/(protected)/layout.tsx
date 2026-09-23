@@ -8,10 +8,12 @@ import { AnimatePresence, motion } from "motion/react";
 import { Eye, EyeOff, HelpCircle, Menu } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { VisibilityProvider, useValuesVisibility } from "@/lib/visibility-context";
+import { isAppLockEnabled } from "@/lib/app-lock";
 import { NavDrawer } from "@/app/_components/NavDrawer";
 import { Sidebar } from "@/app/_components/Sidebar";
 import { AddTransactionButton } from "@/app/_components/AddTransactionButton";
 import { HelpModal } from "@/app/_components/HelpModal";
+import { AppLockScreen } from "@/app/_components/AppLockScreen";
 
 export default function ProtectedLayout({
   children,
@@ -22,6 +24,10 @@ export default function ProtectedLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Lido direto do localStorage no inicializador (não num efeito) — mesmo
+  // padrão já usado pro tema/visibilidade, seguro porque este layout só
+  // renderiza no cliente.
+  const [unlocked, setUnlocked] = useState(() => !isAppLockEnabled());
 
   useEffect(() => {
     if (!loading && !user) {
@@ -31,6 +37,13 @@ export default function ProtectedLayout({
 
   if (loading || !user) {
     return null;
+  }
+
+  // Enquanto travado, nem monta o resto da árvore (Dashboard, hooks do
+  // Firestore, etc.) — além de simples, evita buscar dados financeiros antes
+  // do PIN/biometria confirmar.
+  if (!unlocked) {
+    return <AppLockScreen onUnlock={() => setUnlocked(true)} />;
   }
 
   return (

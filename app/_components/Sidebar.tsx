@@ -4,11 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import Image from "next/image";
+import { LogOut } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 import { NAV_ITEMS } from "./nav-items";
 
 /** Sidebar fixa (≥ md), substitui o hambúrguer/drawer em telas largas — mesma lista de destinos. */
 export function Sidebar() {
   const pathname = usePathname();
+  const { nickname, signOut } = useAuth();
 
   return (
     <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-border bg-surface md:flex">
@@ -24,7 +27,7 @@ export function Sidebar() {
         <p className="font-semibold leading-tight">Projeto Dinheiro</p>
       </div>
 
-      <nav className="flex flex-col gap-1 px-3 py-2">
+      <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
           return (
@@ -48,6 +51,16 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      <div className="border-t border-border px-3 py-3">
+        <button
+          onClick={() => signOut()}
+          className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium text-ink-muted transition-colors hover:bg-negative-soft hover:text-negative"
+        >
+          <LogOut size={18} />
+          {nickname ? `Sair (${nickname})` : "Sair"}
+        </button>
+      </div>
     </aside>
   );
 }

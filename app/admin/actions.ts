@@ -3,13 +3,14 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { getAdminAuth } from "@/lib/firebase-admin";
+import { getAdminAuth, getAdminFirestore } from "@/lib/firebase-admin";
 import {
   ADMIN_COOKIE_MAX_AGE,
   ADMIN_COOKIE_NAME,
   createAdminSessionToken,
   verifyAdminSessionToken,
 } from "@/lib/admin-session";
+import type { FeedbackStatus } from "@/lib/types";
 
 export type AdminLoginState = { error?: string } | undefined;
 
@@ -62,5 +63,17 @@ async function requireAdminSession() {
 export async function setUserDisabled(uid: string, disabled: boolean) {
   await requireAdminSession();
   await getAdminAuth().updateUser(uid, { disabled });
+  revalidatePath("/admin");
+}
+
+export async function setFeedbackStatus(id: string, status: FeedbackStatus) {
+  await requireAdminSession();
+  await getAdminFirestore().collection("feedback").doc(id).update({ status });
+  revalidatePath("/admin");
+}
+
+export async function deleteFeedback(id: string) {
+  await requireAdminSession();
+  await getAdminFirestore().collection("feedback").doc(id).delete();
   revalidatePath("/admin");
 }

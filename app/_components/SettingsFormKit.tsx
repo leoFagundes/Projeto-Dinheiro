@@ -1,6 +1,7 @@
 "use client";
 
-import { Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
+import { motion } from "motion/react";
+import { Eye, EyeOff, Pencil, Plus, Trash2 } from "lucide-react";
 
 /** Classes reaproveitadas pelos formulários de adicionar/editar entidades (banco, caixinha, investimento, categoria...) em todo o app. */
 export const INPUT_CLASS =
@@ -9,6 +10,38 @@ export const INPUT_CLASS_COMPACT =
   "rounded-2xl border border-border bg-bg px-4 py-2.5 text-sm outline-none transition-colors focus:border-accent";
 export const SAVE_BUTTON_CLASS =
   "rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60";
+
+/** Botão de "+" que gira e vira "×" quando o formulário associado está aberto — usado no cabeçalho de Bancos, Caixinhas e Investimentos. */
+export function ToggleAddButton({
+  open,
+  onClick,
+  label,
+  size = 20,
+}: {
+  open: boolean;
+  onClick: () => void;
+  label: string;
+  size?: number;
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      aria-label={open ? `Fechar formulário de ${label.toLowerCase()}` : label}
+      aria-expanded={open}
+      whileTap={{ scale: 0.85 }}
+      className="flex items-center justify-center text-ink-muted transition-colors hover:text-accent-strong"
+    >
+      <motion.span
+        className="flex"
+        animate={{ rotate: open ? 45 : 0 }}
+        transition={{ type: "spring", stiffness: 400, damping: 22 }}
+      >
+        <Plus size={size} />
+      </motion.span>
+    </motion.button>
+  );
+}
 
 /** Card com título e ícone, usado como moldura de cada seção de gerenciamento de entidade. */
 export function SectionCard({
@@ -35,6 +68,36 @@ export function SectionCard({
       </div>
       <div className="rounded-card bg-surface shadow-card p-4">{children}</div>
     </section>
+  );
+}
+
+/** Interruptor liga/desliga (preferências booleanas em Ajustes). */
+export function ToggleSwitch({
+  checked,
+  onChange,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      disabled={disabled}
+      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+        checked ? "bg-accent" : "bg-border"
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform ${
+          checked ? "translate-x-5" : "translate-x-0.5"
+        }`}
+      />
+    </button>
   );
 }
 

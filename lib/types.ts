@@ -257,3 +257,22 @@ export type InvestmentGoal = {
   metaValor: number;
   criadoEm: number;
 };
+
+export type FeedbackTipo = "bug" | "sugestao" | "elogio" | "outro";
+export type FeedbackStatus = "novo" | "lido" | "resolvido";
+
+/**
+ * Feedback enviado pelo usuário via Ajustes → Feedback. Só é criado pelo
+ * usuário — a leitura e a gestão (mudar status, excluir) acontecem em
+ * /admin, via SDK Admin, que ignora as regras do Firestore. O usuário nunca
+ * lê o que já enviou de volta.
+ */
+export type Feedback = {
+  id: string;
+  userId: string;
+  userEmail: string;
+  tipo: FeedbackTipo;
+  mensagem: string;
+  status: FeedbackStatus;
+  criadoEm: number;
+};

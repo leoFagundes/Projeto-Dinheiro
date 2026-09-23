@@ -606,6 +606,54 @@ export function computeUpcomingEvents(transactions: Transaction[], days = 7): Ca
     .sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0));
 }
 
+export type UpcomingReminder = {
+  id: string;
+  titulo: string;
+  valor: number;
+  data: string;
+  tipo: "assinatura" | "emprestimo";
+};
+
+/**
+ * Cobranças de assinatura e parcelas de empréstimo ainda não pagas que caem
+ * nos próximos `days` dias — usado pro aviso de "fatura/assinatura perto do
+ * vencimento" (ver Ajustes → Notificações).
+ */
+export function computeUpcomingReminders(transactions: Transaction[], days = 3): UpcomingReminder[] {
+  const start = todayIsoDate();
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() + days - 1);
+  const end = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
+
+  const assinaturas = computeUpcomingEvents(transactions, days)
+    .filter((event) => event.recorrente && event.tipo === "despesa")
+    .map(
+      (event): UpcomingReminder => ({
+        id: event.id,
+        titulo: event.descricao,
+        valor: event.valor,
+        data: event.data,
+        tipo: "assinatura",
+      }),
+    );
+
+  const parcelas = computeLoans(transactions).flatMap((loan) =>
+    loan.parcelas
+      .filter((p) => p.data > start && p.data <= end)
+      .map(
+        (p): UpcomingReminder => ({
+          id: p.id,
+          titulo: `${loan.descricao} (parcela ${p.parcelaAtual}/${p.parcelaTotal})`,
+          valor: p.valor,
+          data: p.data,
+          tipo: "emprestimo",
+        }),
+      ),
+  );
+
+  return [...assinaturas, ...parcelas].sort((a, b) => (a.data < b.data ? -1 : 1));
+}
+
 /**
  * Projeta o saldo (receitas - despesas) do mês até o fim: soma o que já está
  * lançado (inclusive parcelas/recorrências futuras já geradas nesse mês) com

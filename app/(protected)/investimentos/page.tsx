@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Check, ChevronDown, ChevronUp, Plus, Trash2, TrendingUp } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Trash2, TrendingUp } from "lucide-react";
 import { useInvestments } from "@/lib/use-investments";
 import { useInvestmentMovements } from "@/lib/use-investment-movements";
 import { useInvestmentGoals } from "@/lib/use-investment-goals";
@@ -35,6 +35,7 @@ import {
   INPUT_CLASS_COMPACT,
   SAVE_BUTTON_CLASS,
   RowActionButtons,
+  ToggleAddButton,
 } from "@/app/_components/SettingsFormKit";
 import { AreaTrendChart, BreakdownChart, SingleSeriesBarChart } from "../_components/Charts";
 
@@ -81,13 +82,7 @@ export default function InvestimentosPage() {
       <div className="flex flex-col gap-6 pb-8">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold">Investimentos</h1>
-          <button
-            onClick={() => setAdding((v) => !v)}
-            aria-label="Adicionar investimento"
-            className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
-          >
-            <Plus size={20} />
-          </button>
+          <ToggleAddButton open={adding} onClick={() => setAdding((v) => !v)} label="Adicionar investimento" />
         </div>
 
         {adding && (
@@ -269,6 +264,7 @@ function AddInvestmentForm({
 
   return (
     <form onSubmit={handleAdd} className="flex flex-col gap-2 rounded-card bg-surface shadow-card p-4">
+      <p className="mb-1 text-sm font-medium">Novo investimento</p>
       <input
         type="text"
         placeholder="Nome (ex: Tesouro Selic, PETR4)"
@@ -469,13 +465,7 @@ function MetasCarteira({
     <section>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-medium text-ink-muted">Metas da carteira</h2>
-        <button
-          onClick={() => setAdding((v) => !v)}
-          className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
-          aria-label="Nova meta"
-        >
-          <Plus size={16} />
-        </button>
+        <ToggleAddButton open={adding} onClick={() => setAdding((v) => !v)} label="Nova meta" size={16} />
       </div>
 
       {adding && (

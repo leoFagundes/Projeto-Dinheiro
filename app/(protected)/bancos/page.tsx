@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowLeftRight, Landmark, Plus, Receipt } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, Landmark, Receipt } from "lucide-react";
 import { useBanks } from "@/lib/use-banks";
 import { useTransactions } from "@/lib/use-transactions";
 import { useCategories } from "@/lib/use-categories";
@@ -27,7 +27,13 @@ import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import { MonthFilter } from "@/app/_components/MonthFilter";
 import { TransactionListItem } from "@/app/_components/TransactionListItem";
 import { MaskedCurrency } from "@/app/_components/Money";
-import { INPUT_CLASS, INPUT_CLASS_COMPACT, SAVE_BUTTON_CLASS, RowActionButtons } from "@/app/_components/SettingsFormKit";
+import {
+  INPUT_CLASS,
+  INPUT_CLASS_COMPACT,
+  SAVE_BUTTON_CLASS,
+  RowActionButtons,
+  ToggleAddButton,
+} from "@/app/_components/SettingsFormKit";
 import type { Bank, BankPayment, Transaction } from "@/lib/types";
 
 export default function BancosPage() {
@@ -95,34 +101,12 @@ export default function BancosPage() {
             <Landmark size={20} className="text-accent-strong" />
             Bancos
           </h1>
-          <button
-            onClick={() => setAdding((v) => !v)}
-            aria-label="Adicionar banco"
-            className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
-          >
-            <Plus size={20} />
-          </button>
+          <ToggleAddButton open={adding} onClick={() => setAdding((v) => !v)} label="Adicionar banco" />
         </div>
-
-        {banks.length > 0 && (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-card bg-surface shadow-card p-4">
-              <p className="text-xs text-ink-muted">Total em contas</p>
-              <p className={`mt-1 text-lg font-semibold ${totalSaldoConta < 0 ? "text-negative" : "text-accent-strong"}`}>
-                <MaskedCurrency value={totalSaldoConta} />
-              </p>
-            </div>
-            <div className="rounded-card bg-surface shadow-card p-4">
-              <p className="text-xs text-ink-muted">Devido este mês</p>
-              <p className="mt-1 text-lg font-semibold text-negative">
-                <MaskedCurrency value={totalFaturaMesAtual} />
-              </p>
-            </div>
-          </div>
-        )}
 
         {adding && (
           <form onSubmit={handleAdd} className="flex flex-col gap-2 rounded-card bg-surface shadow-card p-4">
+            <p className="mb-1 text-sm font-medium">Novo banco</p>
             <input
               type="text"
               placeholder="Nome do banco"
@@ -157,6 +141,23 @@ export default function BancosPage() {
               Criar banco
             </button>
           </form>
+        )}
+
+        {banks.length > 0 && (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-card bg-surface shadow-card p-4">
+              <p className="text-xs text-ink-muted">Total em contas</p>
+              <p className={`mt-1 text-lg font-semibold ${totalSaldoConta < 0 ? "text-negative" : "text-accent-strong"}`}>
+                <MaskedCurrency value={totalSaldoConta} />
+              </p>
+            </div>
+            <div className="rounded-card bg-surface shadow-card p-4">
+              <p className="text-xs text-ink-muted">Devido este mês</p>
+              <p className="mt-1 text-lg font-semibold text-negative">
+                <MaskedCurrency value={totalFaturaMesAtual} />
+              </p>
+            </div>
+          </div>
         )}
 
         {banks.length === 0 ? (

@@ -107,5 +107,12 @@ service cloud.firestore {
     match /userPreferences/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
+
+    // Feedback (Ajustes → Feedback): o usuário só cria, nunca lê de volta.
+    // Leitura/gestão (mudar status, excluir) só pelo SDK Admin em /admin,
+    // que ignora estas regras — por isso não há allow read/update/delete aqui.
+    match /feedback/{feedbackId} {
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    }
   }
 }

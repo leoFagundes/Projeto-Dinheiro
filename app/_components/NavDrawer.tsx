@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Drawer } from "vaul";
-import { LayoutDashboard } from "lucide-react";
+import { LayoutDashboard, LogOut } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 import { NAV_ITEMS } from "./nav-items";
 
 export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
+  const { nickname, signOut } = useAuth();
 
   return (
     <Drawer.Root direction="left" open={open} onOpenChange={(next) => !next && onClose()}>
@@ -29,7 +31,7 @@ export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => voi
             <Drawer.Title className="font-semibold">Projeto Dinheiro</Drawer.Title>
           </div>
 
-          <nav className="flex flex-col gap-1 px-3 pb-6">
+          <nav className="flex flex-1 flex-col gap-1 px-3">
             {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
               const active = pathname === href;
               return (
@@ -49,6 +51,19 @@ export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => voi
               );
             })}
           </nav>
+
+          <div className="border-t border-border px-3 py-3">
+            <button
+              onClick={() => {
+                onClose();
+                void signOut();
+              }}
+              className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium text-ink-muted transition-colors hover:bg-negative-soft hover:text-negative"
+            >
+              <LogOut size={18} />
+              {nickname ? `Sair (${nickname})` : "Sair"}
+            </button>
+          </div>
         </Drawer.Content>
       </Drawer.Portal>
     </Drawer.Root>

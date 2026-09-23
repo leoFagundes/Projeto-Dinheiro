@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { PiggyBank, Plus, Trash2 } from "lucide-react";
+import { PiggyBank, Trash2 } from "lucide-react";
 import { usePockets } from "@/lib/use-pockets";
 import { usePocketMovements } from "@/lib/use-pocket-movements";
 import { useBanks } from "@/lib/use-banks";
@@ -14,7 +14,13 @@ import { BottomSheet } from "@/app/_components/BottomSheet";
 import { ConfirmDialog } from "@/app/_components/ConfirmDialog";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import { MaskedCurrency } from "@/app/_components/Money";
-import { INPUT_CLASS, INPUT_CLASS_COMPACT, SAVE_BUTTON_CLASS, RowActionButtons } from "@/app/_components/SettingsFormKit";
+import {
+  INPUT_CLASS,
+  INPUT_CLASS_COMPACT,
+  SAVE_BUTTON_CLASS,
+  RowActionButtons,
+  ToggleAddButton,
+} from "@/app/_components/SettingsFormKit";
 import type { Bank, Pocket, PocketMovement } from "@/lib/types";
 
 export default function CaixinhasPage() {
@@ -64,26 +70,12 @@ export default function CaixinhasPage() {
             <PiggyBank size={20} className="text-accent-strong" />
             Caixinhas
           </h1>
-          <button
-            onClick={() => setAdding((v) => !v)}
-            aria-label="Adicionar caixinha"
-            className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
-          >
-            <Plus size={20} />
-          </button>
+          <ToggleAddButton open={adding} onClick={() => setAdding((v) => !v)} label="Adicionar caixinha" />
         </div>
-
-        {pockets.length > 0 && (
-          <div className="rounded-card bg-surface shadow-card p-4">
-            <p className="text-xs text-ink-muted">Total guardado</p>
-            <p className="mt-1 text-lg font-semibold text-accent-strong">
-              <MaskedCurrency value={pockets.reduce((sum, p) => sum + p.saldo, 0)} />
-            </p>
-          </div>
-        )}
 
         {adding && (
           <form onSubmit={handleAdd} className="flex flex-col gap-2 rounded-card bg-surface shadow-card p-4">
+            <p className="mb-1 text-sm font-medium">Nova caixinha</p>
             <input
               type="text"
               placeholder="Nome (ex: Reserva, Viagem)"
@@ -109,6 +101,15 @@ export default function CaixinhasPage() {
               Criar caixinha
             </button>
           </form>
+        )}
+
+        {pockets.length > 0 && (
+          <div className="rounded-card bg-surface shadow-card p-4">
+            <p className="text-xs text-ink-muted">Total guardado</p>
+            <p className="mt-1 text-lg font-semibold text-accent-strong">
+              <MaskedCurrency value={pockets.reduce((sum, p) => sum + p.saldo, 0)} />
+            </p>
+          </div>
         )}
 
         {pockets.length === 0 ? (

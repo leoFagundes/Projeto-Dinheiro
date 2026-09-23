@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getAdminAuth, getAdminFirestore } from "@/lib/firebase-admin";
 import { ADMIN_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-session";
 import { UsersTable, type AdminUser } from "./_components/UsersTable";
+import { FeedbackTable, type AdminFeedback } from "./_components/FeedbackTable";
 import { adminLogout } from "./actions";
 
 export default async function AdminPage() {
@@ -16,9 +17,11 @@ export default async function AdminPage() {
 
   let authUsers;
   let db;
+  let feedbackDocs;
   try {
     authUsers = (await getAdminAuth().listUsers(1000)).users;
     db = getAdminFirestore();
+    feedbackDocs = (await db.collection("feedback").orderBy("criadoEm", "desc").get()).docs;
   } catch (error) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-4 px-5 py-8">
@@ -77,10 +80,22 @@ export default async function AdminPage() {
     }))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
+  const feedbackList: AdminFeedback[] = feedbackDocs.map((docSnap) => {
+    const data = docSnap.data();
+    return {
+      id: docSnap.id,
+      userEmail: (data.userEmail as string | undefined) ?? "",
+      tipo: data.tipo,
+      mensagem: data.mensagem,
+      status: data.status,
+      criadoEm: data.criadoEm,
+    };
+  });
+
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-6 px-5 py-8">
+    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-8 px-5 py-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Usuários ({users.length})</h1>
+        <h1 className="text-lg font-semibold">Admin</h1>
         <form action={adminLogout}>
           <button
             type="submit"
@@ -91,7 +106,15 @@ export default async function AdminPage() {
         </form>
       </div>
 
-      <UsersTable users={users} />
+      <section>
+        <h2 className="mb-3 text-sm font-medium text-ink-muted">Usuários ({users.length})</h2>
+        <UsersTable users={users} />
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-sm font-medium text-ink-muted">Feedback ({feedbackList.length})</h2>
+        <FeedbackTable items={feedbackList} />
+      </section>
     </main>
   );
 }

@@ -12,6 +12,7 @@ import { usePocketMovements } from "@/lib/use-pocket-movements";
 import { useInvestments } from "@/lib/use-investments";
 import { useInvestmentMovements } from "@/lib/use-investment-movements";
 import { usePatrimonioHistory } from "@/lib/use-patrimonio-history";
+import { useAccountPreferences } from "@/lib/use-account-preferences";
 import { assignCategoryColors, mapCategoryIcons } from "@/lib/categories";
 import {
   computeBankSaldoConta,
@@ -22,8 +23,9 @@ import {
   computePatrimonio,
   computeProjectedMonthBalance,
   computeUpcomingEvents,
+  computeUpcomingReminders,
 } from "@/lib/derived";
-import { addMonthsToKey, currentMonthKey } from "@/lib/format";
+import { addMonthsToKey, currentMonthKey, formatCurrency } from "@/lib/format";
 import { PageFade } from "@/app/_components/PageFade";
 import { DashboardSkeleton } from "@/app/_components/Skeleton";
 import { SummaryCards } from "./_components/SummaryCards";
@@ -47,6 +49,7 @@ export default function DashboardPage() {
   const { investments } = useInvestments();
   const { movements: investmentMovements } = useInvestmentMovements();
   const { snapshots: patrimonioHistorico, syncSnapshot } = usePatrimonioHistory();
+  const { notificacoesFatura } = useAccountPreferences();
 
   const thisMonth = currentMonthKey();
   const patrimonio = computePatrimonio(
@@ -73,6 +76,31 @@ export default function DashboardPage() {
       total: patrimonio.total,
     });
   }, [loading, patrimonio, thisMonth, syncSnapshot]);
+
+  useEffect(() => {
+    if (loading || !notificacoesFatura) return;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const dedupeKey = "avisosDisparados:" + todayKey;
+    try {
+      if (localStorage.getItem(dedupeKey)) return;
+    } catch {
+      return;
+    }
+    const reminders = computeUpcomingReminders(transactions, 3);
+    if (reminders.length === 0) return;
+    for (const reminder of reminders) {
+      new Notification(reminder.titulo, {
+        body: `${formatCurrency(reminder.valor)} · vence em ${new Date(reminder.data + "T00:00:00").toLocaleDateString("pt-BR")}`,
+        tag: reminder.id,
+      });
+    }
+    try {
+      localStorage.setItem(dedupeKey, "1");
+    } catch {
+      // ignora — pior caso é repetir o aviso na próxima visita do mesmo dia
+    }
+  }, [loading, notificacoesFatura, transactions]);
 
   if (loading) {
     return (
