@@ -14,7 +14,10 @@ const THEME_INIT_SCRIPT = `
 (function () {
   try {
     var stored = localStorage.getItem("temaPreferencia");
-    var dark = stored === "dark" || (stored !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    // Sem preferência salva (conta nova ou nunca mexeu em Aparência): claro
+    // por padrão, sem seguir o sistema. "system" salvo explicitamente continua
+    // seguindo o SO normalmente.
+    var dark = stored === "dark" || (stored === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
     document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
   } catch (e) {}
 })();

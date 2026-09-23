@@ -18,12 +18,15 @@ const STORAGE_KEY = "temaPreferencia";
 const COLLECTION = "userPreferences";
 
 function readStoredTheme(): ThemePreference {
-  if (typeof window === "undefined") return "system";
+  // Sem preferência salva (conta nova ou nunca mexeu em Aparência): claro
+  // por padrão, sem seguir o sistema — só quem escolhe "Sistema" de
+  // propósito é que segue o SO.
+  if (typeof window === "undefined") return "light";
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved === "light" || saved === "dark" || saved === "system" ? saved : "system";
+    return saved === "light" || saved === "dark" || saved === "system" ? saved : "light";
   } catch {
-    return "system";
+    return "light";
   }
 }
 
