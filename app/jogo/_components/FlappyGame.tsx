@@ -156,11 +156,17 @@ type OscEventKind = "crash" | "alta";
 const PUNCH_SRC = "/sounds/punch.mp3";
 const PUNCH_VOLUME = 0.35;
 
-// A cada SPEED_STEP_SCORE pontos, a velocidade sobe SPEED_STEP_INCREMENT
-// (ex: 5 pontos = 1.1x, 10 pontos = 1.2x...), até o teto de MAX_SPEED_MULTIPLIER.
+// A cada SPEED_STEP_SCORE pontos, o multiplicador MOSTRADO na tela sobe
+// SPEED_STEP_INCREMENT (ex: 5 pontos = 1.1x, 10 pontos = 1.2x...), até o teto
+// de MAX_SPEED_MULTIPLIER — esse é só o número do badge, que continua "em
+// degraus" de propósito (fácil de ler). O movimento de verdade usa
+// currentSpeedMultiplierRef, que persegue esse alvo suavemente (ver
+// updateSpeedMultiplier) em vez de saltar pro novo valor de uma vez — sem
+// isso, cada marco de 5 pontos dava um "solavanco" perceptível no jogo inteiro.
 const SPEED_STEP_SCORE = 5;
 const SPEED_STEP_INCREMENT = 0.1;
 const MAX_SPEED_MULTIPLIER = 3;
+const SPEED_RAMP_PER_SECOND = 0.15; // quão rápido o multiplicador real alcança o alvo (~0,67s pra fechar um degrau de 0,1)
 
 function getSpeedMultiplier(score: number): number {
   const raw = 1 + Math.floor(score / SPEED_STEP_SCORE) * SPEED_STEP_INCREMENT;
@@ -441,6 +447,10 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
   const coinsRef = useRef(0);
   const gameStateRef = useRef<GameState>("idle");
   const speedMultiplierDisplayRef = useRef(1);
+  // Multiplicador de velocidade REAL (usado no movimento) — persegue
+  // getSpeedMultiplier(score) suavemente (ver updateSpeedMultiplier), nunca
+  // salta pro valor novo de uma vez como o badge exibido faz.
+  const currentSpeedMultiplierRef = useRef(1);
   const recordFanfareFiredRef = useRef(false);
   // Quando as pilastras podem começar a aparecer (performance.now() + o
   // atraso calmo depois do pouso) — setado em startGame().
@@ -634,6 +644,7 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
     setTotalCoinsAtGameOver(null);
     setOscChartSnapshot([]);
     speedMultiplierDisplayRef.current = 1;
+    currentSpeedMultiplierRef.current = 1;
     setSpeedMultiplier(1);
     recordFanfareFiredRef.current = false;
     setIsNewRecord(false);
@@ -1209,6 +1220,19 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
     pillarsRef.current = pillarsRef.current.filter((p) => p.x + PILLAR_WIDTH > -10);
   }
 
+  /** Persegue getSpeedMultiplier(score) suavemente em vez de saltar — chamada
+   * uma vez por frame, antes de qualquer coisa que leia currentSpeedMultiplierRef
+   * nesse mesmo frame (o scroll de fundo no rAF e o `speed` daqui de baixo). */
+  function updateSpeedMultiplier(dt: number) {
+    const target = getSpeedMultiplier(scoreRef.current);
+    const current = currentSpeedMultiplierRef.current;
+    if (current < target) {
+      currentSpeedMultiplierRef.current = Math.min(target, current + SPEED_RAMP_PER_SECOND * dt);
+    } else if (current > target) {
+      currentSpeedMultiplierRef.current = Math.max(target, current - SPEED_RAMP_PER_SECOND * dt);
+    }
+  }
+
   function update(dt: number) {
     if (gameStateRef.current !== "playing" || freezeRef.current) return;
     const { width, height } = sizeRef.current;
@@ -1218,7 +1242,7 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
     bird.y += bird.vy * dt;
     bird.rotation = Math.max(MAX_ROTATION_UP, Math.min(MAX_ROTATION_DOWN, bird.vy / 500));
 
-    const speed = BASE_PILLAR_SPEED * getSpeedMultiplier(scoreRef.current);
+    const speed = BASE_PILLAR_SPEED * currentSpeedMultiplierRef.current;
     const mode = gameModeRef.current;
     const birdX = width * BIRD_X_RATIO;
 
@@ -1766,11 +1790,14 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
       if (lastTime === null) lastTime = time;
       const dt = Math.min((time - lastTime) / 1000, 1 / 30);
       lastTime = time;
+      if (gameStateRef.current === "playing") updateSpeedMultiplier(dt);
       // O fundo rola sempre (até no menu, bem devagar) — só acelera pra
-      // valer, junto com as pilastras, durante o jogo de verdade.
+      // valer, junto com as pilastras, durante o jogo de verdade. Usa o
+      // multiplicador SUAVIZADO (não getSpeedMultiplier direto) pra não dar
+      // um salto visível toda vez que a pontuação bate um múltiplo de 5.
       const worldSpeed =
         gameStateRef.current === "playing"
-          ? BASE_PILLAR_SPEED * getSpeedMultiplier(scoreRef.current)
+          ? BASE_PILLAR_SPEED * currentSpeedMultiplierRef.current
           : BASE_PILLAR_SPEED * 0.3;
       backgroundScrollRef.current += worldSpeed * dt;
       update(dt);
