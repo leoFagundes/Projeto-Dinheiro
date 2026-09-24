@@ -4,11 +4,13 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { FirebaseError } from "firebase/app";
+import { motion, useAnimationControls } from "motion/react";
 import {
   Bell,
   Database,
   Delete,
   Fingerprint,
+  Gamepad2,
   LogOut,
   MessageSquareText,
   Monitor,
@@ -37,6 +39,7 @@ import {
 } from "@/lib/app-lock";
 import { buildBackup, deleteAllUserData, downloadBackup, importBackup, type BackupData } from "@/lib/backup";
 import { FALLBACK_CATEGORY_ICON } from "@/lib/categories";
+import { BirdIcon } from "@/app/_components/BirdIcon";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import { PageFade } from "@/app/_components/PageFade";
 import { ConfirmDialog } from "@/app/_components/ConfirmDialog";
@@ -65,6 +68,7 @@ export default function ConfiguracoesPage() {
         <DadosSection />
         <SegurancaSection />
         <FeedbackSection />
+        <EasterEggSection />
         <ContaSection />
       </div>
     </PageFade>
@@ -892,6 +896,53 @@ function FeedbackSection() {
   );
 }
 
+/**
+ * Só aparece depois que a conta descobre o easter egg pela primeira vez
+ * (jogoDesbloqueado) — antes disso, o único jeito de achar é o "?" escondido
+ * no fim da seção Conta. Uma vez descoberto, não faz mais sentido escondê-lo.
+ */
+function EasterEggSection() {
+  const router = useRouter();
+  const { jogoDesbloqueado, jogoAtalhoMenu, setJogoAtalhoMenu } = useAccountPreferences();
+
+  if (!jogoDesbloqueado) return null;
+
+  return (
+    <section>
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-medium text-ink-muted">
+        <Gamepad2 size={16} />
+        Cifrão Voador
+      </h2>
+      <div className="rounded-card bg-surface shadow-card p-4">
+        <div className="flex items-center gap-3">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-accent-soft">
+            <BirdIcon size={26} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Aquele joguinho escondido</p>
+            <p className="text-xs text-ink-muted">Você já descobriu — jogue quando quiser.</p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => router.push("/jogo")}
+          className={`mt-3 w-full ${SAVE_BUTTON_CLASS}`}
+        >
+          Jogar
+        </button>
+
+        <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+          <div className="min-w-0 pr-3">
+            <p className="text-sm text-ink">Atalho no menu lateral</p>
+            <p className="text-xs text-ink-muted">Adiciona &ldquo;Jogo&rdquo; na navegação, do lado do resto.</p>
+          </div>
+          <ToggleSwitch checked={jogoAtalhoMenu} onChange={() => setJogoAtalhoMenu(!jogoAtalhoMenu)} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ContaSection() {
   const { user, nickname, signOut, updateNickname } = useAuth();
   const [apelido, setApelido] = useState(nickname ?? "");
@@ -959,8 +1010,60 @@ function ContaSection() {
         </button>
       </div>
 
+      <SecretGameTrigger />
+
       <DeleteAccountSheet open={deleting} onClose={() => setDeleting(false)} />
     </section>
+  );
+}
+
+const RAPID_CLICK_WINDOW_MS = 900;
+const RAPID_CLICKS_NEEDED = 5;
+
+/**
+ * Easter egg: "?" quase invisível no fim de Ajustes. 5 cliques dentro de uma
+ * janela de 600ms (contados a partir do clique mais recente, então cliques
+ * lentos não acumulam) abrem o jogo escondido em /jogo. Cada clique dá um
+ * leve pulso de escala/opacidade, mesmo sem completar a sequência.
+ */
+function SecretGameTrigger() {
+  const router = useRouter();
+  const { jogoDesbloqueado } = useAccountPreferences();
+  const clicksRef = useRef<number[]>([]);
+  const controls = useAnimationControls();
+
+  // Depois que a conta acha o jogo uma vez, o "?" escondido não faz mais
+  // sentido — a EasterEggSection (logo abaixo do Feedback) assume o posto.
+  if (jogoDesbloqueado) return null;
+
+  function handleClick() {
+    const now = Date.now();
+    const recent = [...clicksRef.current, now].filter((t) => now - t < RAPID_CLICK_WINDOW_MS);
+    clicksRef.current = recent;
+    controls.start(
+      { scale: [1, 1.4, 1], opacity: [0.35, 0.8, 0.35] },
+      { duration: 0.4, ease: "easeOut" },
+    );
+    if (recent.length >= RAPID_CLICKS_NEEDED) {
+      clicksRef.current = [];
+      router.push("/jogo");
+    }
+  }
+
+  return (
+    <div className="mt-6 flex justify-center pb-2">
+      <motion.button
+        type="button"
+        onClick={handleClick}
+        animate={controls}
+        initial={{ opacity: 0.35, scale: 1 }}
+        aria-hidden="true"
+        tabIndex={-1}
+        className="select-none p-3 text-base text-ink-muted"
+      >
+        ?
+      </motion.button>
+    </div>
   );
 }
 

@@ -1,5 +1,6 @@
 import {
   CalendarClock,
+  Gamepad2,
   History,
   Landmark,
   LayoutDashboard,
@@ -23,3 +24,9 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/assinaturas", label: "Assinaturas", icon: Repeat },
   { href: "/configuracoes", label: "Ajustes", icon: Settings },
 ];
+
+/**
+ * Item extra opcional (easter egg) — só entra na navegação se a conta
+ * ativar "Atalho no menu lateral" em Ajustes (ver EasterEggSection).
+ */
+export const GAME_NAV_ITEM: NavItem = { href: "/jogo", label: "Jogo", icon: Gamepad2 };

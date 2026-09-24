@@ -5,11 +5,14 @@ import { usePathname } from "next/navigation";
 import { Drawer } from "vaul";
 import { LayoutDashboard, LogOut } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { NAV_ITEMS } from "./nav-items";
+import { useAccountPreferences } from "@/lib/use-account-preferences";
+import { GAME_NAV_ITEM, NAV_ITEMS } from "./nav-items";
 
 export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const { nickname, signOut } = useAuth();
+  const { jogoAtalhoMenu } = useAccountPreferences();
+  const items = jogoAtalhoMenu ? [...NAV_ITEMS, GAME_NAV_ITEM] : NAV_ITEMS;
 
   return (
     <Drawer.Root direction="left" open={open} onOpenChange={(next) => !next && onClose()}>
@@ -32,7 +35,7 @@ export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => voi
           </div>
 
           <nav className="flex flex-1 flex-col gap-1 px-3">
-            {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+            {items.map(({ href, label, icon: Icon }) => {
               const active = pathname === href;
               return (
                 <Link

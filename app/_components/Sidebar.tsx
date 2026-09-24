@@ -6,12 +6,15 @@ import { motion } from "motion/react";
 import Image from "next/image";
 import { LogOut } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { NAV_ITEMS } from "./nav-items";
+import { useAccountPreferences } from "@/lib/use-account-preferences";
+import { GAME_NAV_ITEM, NAV_ITEMS } from "./nav-items";
 
 /** Sidebar fixa (≥ md), substitui o hambúrguer/drawer em telas largas — mesma lista de destinos. */
 export function Sidebar() {
   const pathname = usePathname();
   const { nickname, signOut } = useAuth();
+  const { jogoAtalhoMenu } = useAccountPreferences();
+  const items = jogoAtalhoMenu ? [...NAV_ITEMS, GAME_NAV_ITEM] : NAV_ITEMS;
 
   return (
     <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-border bg-surface md:flex">
@@ -28,7 +31,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+        {items.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
           return (
             <Link

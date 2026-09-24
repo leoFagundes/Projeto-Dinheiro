@@ -276,3 +276,25 @@ export type Feedback = {
   status: FeedbackStatus;
   criadoEm: number;
 };
+
+/**
+ * Progresso de uma conta no easter egg (jogo em Ajustes). Um documento por
+ * conta (id do doc = uid, como em `userPreferences`) — é o que permite um
+ * ranking compartilhado entre todos os perfis: qualquer usuário autenticado
+ * pode ler a coleção inteira, mas só o dono do documento pode escrever
+ * nele. `pontuacoesPorModo` guarda um recorde separado por modo de jogo (ver
+ * lib/game-modes.ts) — cada chave só sobe (a regra do Firestore recusa
+ * sozinha uma pontuação menor); `moedas` acumula partida após partida (é
+ * uma "carteira" persistente) e pode ser gasta na loja —
+ * `itensComprados`/`passarinhoEquipado` guardam o que foi comprado e qual
+ * skin está ativo (ver lib/shop-items.ts).
+ */
+export type GameScore = {
+  id: string;
+  nickname: string;
+  pontuacoesPorModo?: Partial<Record<string, number>>;
+  moedas: number;
+  itensComprados?: string[];
+  passarinhoEquipado?: string;
+  atualizadoEm: number;
+};

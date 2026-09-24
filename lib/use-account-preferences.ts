@@ -16,6 +16,10 @@ export function useAccountPreferences() {
   const { user } = useAuth();
   const [orcamentoMensal, setOrcamentoMensalState] = useState<number | undefined>(undefined);
   const [notificacoesFatura, setNotificacoesFaturaState] = useState(false);
+  // jogoDesbloqueado: true assim que a conta entra em /jogo pela 1ª vez —
+  // depois disso, o "?" escondido em Ajustes vira um card de verdade.
+  const [jogoDesbloqueado, setJogoDesbloqueadoState] = useState(false);
+  const [jogoAtalhoMenu, setJogoAtalhoMenuState] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,6 +28,8 @@ export function useAccountPreferences() {
       const data = snap.data();
       setOrcamentoMensalState((data?.orcamentoMensal as number | undefined) ?? undefined);
       setNotificacoesFaturaState(Boolean(data?.notificacoesFatura));
+      setJogoDesbloqueadoState(Boolean(data?.jogoDesbloqueado));
+      setJogoAtalhoMenuState(Boolean(data?.jogoAtalhoMenu));
       setLoading(false);
     });
     return unsubscribe;
@@ -43,5 +49,26 @@ export function useAccountPreferences() {
     await setDoc(doc(db, COLLECTION, user.uid), { notificacoesFatura: ativo }, { merge: true });
   }
 
-  return { orcamentoMensal, notificacoesFatura, loading, setOrcamentoMensal, setNotificacoesFatura };
+  /** Chamado ao entrar em /jogo — idempotente, seguro de chamar toda vez. */
+  async function markJogoDesbloqueado() {
+    if (!user) return;
+    await setDoc(doc(db, COLLECTION, user.uid), { jogoDesbloqueado: true }, { merge: true });
+  }
+
+  async function setJogoAtalhoMenu(ativo: boolean) {
+    if (!user) return;
+    await setDoc(doc(db, COLLECTION, user.uid), { jogoAtalhoMenu: ativo }, { merge: true });
+  }
+
+  return {
+    orcamentoMensal,
+    notificacoesFatura,
+    jogoDesbloqueado,
+    jogoAtalhoMenu,
+    loading,
+    setOrcamentoMensal,
+    setNotificacoesFatura,
+    markJogoDesbloqueado,
+    setJogoAtalhoMenu,
+  };
 }

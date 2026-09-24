@@ -114,5 +114,41 @@ service cloud.firestore {
     match /feedback/{feedbackId} {
       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
     }
+
+    // Ranking + carteira de moedas do easter egg (id = uid, como
+    // userPreferences): leitura aberta pra qualquer usuário logado, porque
+    // o ranking é COMPARTILHADO entre contas (o app decide no cliente quais
+    // abas de modo mostrar pra cada um, não dá pra restringir campo a campo
+    // aqui). Escrita só pelo dono, em um de dois caminhos: (a) terminar uma
+    // partida — a pontuação de CADA modo em pontuacoesPorModo só sobe, moedas
+    // só sobem — ou (b) comprar um item na loja — moedas descem, mas só se
+    // ganhou exatamente 1 item novo em itensComprados. Não valida o preço
+    // exato contra o catálogo (confia no cliente pra isso, como o resto do
+    // app já faz — não é dinheiro de verdade).
+    match /gameScores/{uid} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == uid;
+      // .get(campo, padrão) em vez de leitura direta: documentos criados
+      // antes de um campo existir não têm essa chave, e ler uma chave
+      // ausente direto (resource.data.moedas) derruba a regra inteira —
+      // negando tudo, mesmo uma atualização que nem mexe nesse campo. Os 3
+      // modos são fixos (lib/game-modes.ts) — por isso checados um a um em
+      // vez de percorrer o mapa dinamicamente (a linguagem das regras não
+      // itera chaves de mapa).
+      allow update: if request.auth != null && request.auth.uid == uid && (
+        (
+          request.resource.data.get('pontuacoesPorModo', {}).get('classico', 0)
+            >= resource.data.get('pontuacoesPorModo', {}).get('classico', 0)
+          && request.resource.data.get('pontuacoesPorModo', {}).get('oscilante', 0)
+            >= resource.data.get('pontuacoesPorModo', {}).get('oscilante', 0)
+          && request.resource.data.get('pontuacoesPorModo', {}).get('caotico', 0)
+            >= resource.data.get('pontuacoesPorModo', {}).get('caotico', 0)
+          && request.resource.data.moedas >= resource.data.get('moedas', 0)
+        )
+        ||
+        (request.resource.data.moedas < resource.data.get('moedas', 0)
+          && request.resource.data.itensComprados.size() == resource.data.get('itensComprados', []).size() + 1)
+      );
+    }
   }
 }
