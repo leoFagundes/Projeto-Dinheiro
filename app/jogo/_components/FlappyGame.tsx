@@ -16,9 +16,7 @@ const BIRD_RADIUS = 15;
 const BIRD_X_RATIO = 0.32;
 const PILLAR_WIDTH = 58;
 const PILLAR_GAP = 165;
-const PILLAR_MARGIN = 70; // distância mínima do centro do vão até o teto/chão
-const OSC_AMPLITUDE = 55; // px — quanto o vão sobe/desce no modo Vaivém
-const OSC_SPEED = 1.8; // rad/s
+const PILLAR_MARGIN = 70; // distância mínima do centro do vão até o teto/chão (Clássico)
 const FLOAT_MARGIN = 40; // margem mínima do topo/chão usada pro posicionamento vertical no modo Caos
 const BASE_PILLAR_SPEED = 165; // px/s, antes de aplicar o multiplicador
 const PILLAR_SPACING = 310; // distância percorrida entre pilares
@@ -50,8 +48,14 @@ const CAP_NATIVE_H = 36;
 // rápido — é isso que dá a sensação de profundidade.
 const SCENE_NATIVE_W = 480;
 const SCENE_NATIVE_H = 860;
+// O céu (camada-1-ceu.svg) NÃO entra na lista de camadas ladrilhadas — tem a
+// moeda-sol desenhada perto da borda direita da própria arte (x=360 de 480),
+// então ladrilhar horizontalmente cortava a moeda na emenda de cada cópia.
+// É desenhado à parte (ver draw()), uma vez só, fixo, ancorado no canto
+// superior direito com uma margem — nunca rola nem se repete.
+const SKY_SRC = "/game/camada-1-ceu.svg";
+const SKY_RIGHT_MARGIN = 16;
 const PARALLAX_LAYERS: { src: string; speedFactor: number }[] = [
-  { src: "/game/camada-1-ceu.svg", speedFactor: 0.02 },
   { src: "/game/camada-2-nuvens.svg", speedFactor: 0.08 },
   { src: "/game/camada-3-predios.svg", speedFactor: 0.2 },
   { src: "/game/camada-4-bancos.svg", speedFactor: 0.42 },
@@ -117,6 +121,36 @@ function getChaosTier(score: number): ChaosTier {
   return { types: CHAOS_TIER_3, interval: 1.0, doubleChance: CHAOS_DOUBLE_SPAWN_CHANCE };
 }
 
+// Modo Vaivém ("Bolsa de Valores") — pilastras oscilam como cotações,
+// amplitude/velocidade próprias por par (crescem com a pontuação), seta de
+// direção nas tampas, linha de gráfico atrás, ticker de cotações no topo e
+// eventos especiais (CRASH!/ALTA!) a partir da pontuação 10.
+const OSC_MARGIN = 60; // margem do centro do vão até o teto/chão (mais justa que a do Clássico)
+const OSC_AMPLITUDE_START = 40;
+const OSC_AMPLITUDE_PER_SCORE = 3;
+const OSC_AMPLITUDE_MAX = 140;
+const OSC_SPEED_START = 0.02; // rad/frame (60fps) — ver updateOscilanteMode sobre a convenção "por frame"
+const OSC_SPEED_MAX = 0.045;
+const OSC_SPEED_RAMP_PER_SCORE = 0.00075; // chega no teto por volta da pontuação 33, junto com a amplitude
+const OSC_CALM_PAIRS = 3; // primeiros pares da partida, mais comportados
+const OSC_CALM_AMPLITUDE_MAX = 30;
+const OSC_COLLISION_INSET = 2.5; // px — hitbox um pouco menor que o desenho nas laterais (só neste modo)
+const OSC_ARROW_SIZE = 12;
+const OSC_ARROW_OFFSET = 10; // distância da seta até a borda do vão
+const OSC_ARROW_TURN_THRESHOLD = 0.15; // |cos| abaixo disso = perto da virada, seta semitransparente
+const OSC_UP_COLOR = "#1f9d57";
+const OSC_DOWN_COLOR = "#e02d2d";
+const OSC_CHART_DOT_RADIUS = 3;
+
+// Eventos especiais — só a partir da pontuação 10, nunca dois seguidos.
+const OSC_EVENT_MIN_SCORE = 10;
+const OSC_EVENT_COOLDOWN_MIN = 8; // pares
+const OSC_EVENT_COOLDOWN_MAX = 12;
+const OSC_EVENT_WARNING_MS = 1000; // aviso piscando 1s antes do par-evento nascer
+const OSC_EVENT_MOVE_MS = 700; // duração do movimento rápido até o limite (~3x mais rápido que oscilar normalmente)
+
+type OscEventKind = "crash" | "alta";
+
 // Som de colisão — bem mais baixo que o volume nativo do arquivo pra não
 // estourar/distorcer no alto-falante do celular.
 const PUNCH_SRC = "/sounds/punch.mp3";
@@ -148,9 +182,20 @@ type Pillar = {
    * em vez de balançar suave. */
   coinPhase: number;
   gapY?: number;
-  /** Centro sorteado do vão no modo Vaivém — gapY oscila em torno disso. */
+  /** Centro sorteado do vão no modo Vaivém — gapY oscila em torno disso
+   * (recentraliza quando um evento especial termina, ver updateOscilanteMode). */
   gapYBase?: number;
   oscPhase?: number;
+  /** Amplitude/velocidade PRÓPRIAS deste par (crescem com a pontuação no
+   * momento em que ele nasceu — ver getOscDifficulty) — cada par "trava" a
+   * dificuldade que tinha ao nascer, só a fase garante que não fiquem sincronizados. */
+  oscAmplitude?: number;
+  oscVelocidade?: number;
+  /** Evento especial (CRASH!/ALTA!) em andamento neste par — movimento rápido
+   * até o limite, depois volta a oscilar normalmente a partir de onde parou. */
+  oscEventKind?: OscEventKind;
+  oscEventStartedAt?: number;
+  oscEventStartFrom?: number;
 };
 type Bird = { y: number; vy: number; rotation: number };
 
@@ -190,6 +235,15 @@ type ChaosCoin = {
   y: number;
   phase: number;
   collected: boolean;
+};
+
+/** Evento especial do Vaivém (CRASH!/ALTA!) decidido com ~1s de antecedência
+ * — o aviso pisca na tela até `triggerAt`, e só então o PRÓXIMO par que nascer
+ * vira o par-evento de verdade. */
+type OscPendingEvent = {
+  kind: OscEventKind;
+  decidedAt: number;
+  triggerAt: number;
 };
 type ThemeColors = {
   bg: string;
@@ -285,6 +339,30 @@ function playRecordFanfare(ctx: AudioContext) {
   });
 }
 
+/** Sino de pregão do Vaivém — "ding" metálico curto, ao iniciar a partida e a
+ * cada 10 pontos. */
+function playBellDing(ctx: AudioContext) {
+  playTone(ctx, 880, ctx.currentTime, 0.35, "sine", 0.16);
+}
+
+/** Som do evento especial do Vaivém: grave descendente pra "CRASH!", agudo
+ * ascendente pra "ALTA!" — uma rampa de frequência, não um tom fixo. */
+function playMarketEventSound(ctx: AudioContext, kind: OscEventKind) {
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "sawtooth";
+  const [from, to] = kind === "crash" ? [520, 110] : [220, 720];
+  osc.frequency.setValueAtTime(from, now);
+  osc.frequency.exponentialRampToValueAtTime(to, now + 0.5);
+  gain.gain.setValueAtTime(0.15, now);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + 0.6);
+}
+
 function drawRoundedRect(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -311,6 +389,7 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
   const bodyTileImgRef = useRef<HTMLImageElement | null>(null);
   const capImgRef = useRef<HTMLImageElement | null>(null);
   const parallaxImgsRef = useRef<HTMLImageElement[]>([]);
+  const skyImgRef = useRef<HTMLImageElement | null>(null);
   const groundTextureImgRef = useRef<HTMLImageElement | null>(null);
   const chaosImgsRef = useRef<Partial<Record<ChaosEnemyType, HTMLImageElement>>>({});
   const punchAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -344,6 +423,20 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
   // tremor), só para de mover.
   const freezeRef = useRef(false);
   const screenShakeRef = useRef({ active: false, startTime: 0 });
+  // Estado do modo Vaivém ("Bolsa de Valores") — relógio próprio em "frames"
+  // (não segundos de relógio, ver updateOscilanteMode) que alimenta o seno de
+  // cada par; contador de pares desde o início (pra saber quais são os 3
+  // "calmos") e desde o último evento especial (pra sortear o próximo);
+  // histórico de todos os centros de vão já passados, pro mini-gráfico do
+  // game over.
+  const oscTimeRef = useRef(0);
+  const oscPairIndexRef = useRef(0);
+  const oscPairsSinceEventRef = useRef(0);
+  const oscEventCooldownRef = useRef(OSC_EVENT_COOLDOWN_MIN);
+  const oscPendingEventRef = useRef<OscPendingEvent | null>(null);
+  const oscLastWasEventRef = useRef(false);
+  const oscBellScoreRef = useRef(0); // último múltiplo de 10 em que o sino já tocou
+  const chartHistoryRef = useRef<number[]>([]);
   const scoreRef = useRef(0);
   const coinsRef = useRef(0);
   const gameStateRef = useRef<GameState>("idle");
@@ -381,6 +474,10 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
   // então somar myCoins + coins ao vivo na tela de fim de jogo acabaria
   // contando as moedas da partida duas vezes depois que o snapshot chegasse.
   const [totalCoinsAtGameOver, setTotalCoinsAtGameOver] = useState<number | null>(null);
+  // "Foto" do histórico de centros de vão do Vaivém no instante do game over
+  // (chartHistoryRef segue existindo como ref só pro loop escrever; pra
+  // exibir no JSX precisa de um estado de verdade, mesmo motivo do total de moedas acima).
+  const [oscChartSnapshot, setOscChartSnapshot] = useState<number[]>([]);
   // Modo escolhido no menu (chip) — persiste entre partidas e ao voltar pro
   // menu via "Menu" na tela de fim de jogo (resetRunState não mexe nisso de
   // propósito). Só volta pro Clássico se a PÁGINA for desmontada/remontada
@@ -486,6 +583,10 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
     capImg.src = CAP_SRC;
     capImgRef.current = capImg;
 
+    const skyImg = new Image();
+    skyImg.src = SKY_SRC;
+    skyImgRef.current = skyImg;
+
     parallaxImgsRef.current = PARALLAX_LAYERS.map((layer) => {
       const img = new Image();
       img.src = layer.src;
@@ -517,11 +618,21 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
     chaosCoinTimerRef.current = 0;
     freezeRef.current = false;
     screenShakeRef.current = { active: false, startTime: 0 };
+    oscTimeRef.current = 0;
+    oscPairIndexRef.current = 0;
+    oscPairsSinceEventRef.current = 0;
+    oscEventCooldownRef.current =
+      OSC_EVENT_COOLDOWN_MIN + Math.floor(Math.random() * (OSC_EVENT_COOLDOWN_MAX - OSC_EVENT_COOLDOWN_MIN + 1));
+    oscPendingEventRef.current = null;
+    oscLastWasEventRef.current = false;
+    oscBellScoreRef.current = 0;
+    chartHistoryRef.current = [];
     scoreRef.current = 0;
     setScore(0);
     coinsRef.current = 0;
     setCoins(0);
     setTotalCoinsAtGameOver(null);
+    setOscChartSnapshot([]);
     speedMultiplierDisplayRef.current = 1;
     setSpeedMultiplier(1);
     recordFanfareFiredRef.current = false;
@@ -539,7 +650,8 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
     // passarinho "assentar" na tela antes do jogo pressionar de verdade.
     pillarsStartAtRef.current = performance.now() + PILLAR_START_DELAY_MS;
     audioRef.current?.play().catch(() => {});
-    getAudioContext(sfxContextRef); // "destrava" o áudio dentro do gesto do toque
+    const sfx = getAudioContext(sfxContextRef); // "destrava" o áudio dentro do gesto do toque
+    if (selectedMode === "oscilante" && sfx && !mutedRef.current) playBellDing(sfx);
   }
 
   /** Volta pro menu sem jogar — usado pelo botão "Menu" na tela de fim de jogo. */
@@ -626,6 +738,7 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
     const finalScore = scoreRef.current;
     const isNewBest = finalScore > 0 && finalScore > (bestByModeRef.current[gameModeRef.current] ?? 0);
     setTotalCoinsAtGameOver(myCoinsRef.current + coinsRef.current);
+    if (gameModeRef.current === "oscilante") setOscChartSnapshot([...chartHistoryRef.current]);
     void submitRunRef.current(gameModeRef.current, finalScore, coinsRef.current);
     if (isNewBest) {
       confetti({
@@ -637,12 +750,23 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
     }
   }
 
-  function checkCollision(bird: Bird, pillars: Pillar[], width: number, height: number): boolean {
+  /** `lateralInset` encolhe a hitbox nas duas laterais (só o Vaivém usa,
+   * pedido explícito pra não "morrer sem encostar" — as outras modos passam 0). */
+  function checkCollision(
+    bird: Bird,
+    pillars: Pillar[],
+    width: number,
+    height: number,
+    lateralInset: number = 0,
+  ): boolean {
     if (bird.y - BIRD_RADIUS <= 0) return true;
     if (bird.y + BIRD_RADIUS >= height - GROUND_HEIGHT) return true;
     const birdX = width * BIRD_X_RATIO;
     for (const p of pillars) {
-      if (birdX + BIRD_RADIUS > p.x && birdX - BIRD_RADIUS < p.x + PILLAR_WIDTH) {
+      if (
+        birdX + BIRD_RADIUS > p.x + lateralInset &&
+        birdX - BIRD_RADIUS < p.x + PILLAR_WIDTH - lateralInset
+      ) {
         if (p.gapY !== undefined) {
           const gapTop = p.gapY - PILLAR_GAP / 2;
           const gapBottom = p.gapY + PILLAR_GAP / 2;
@@ -843,6 +967,248 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
     chaosEnemiesRef.current = chaosEnemiesRef.current.filter((e) => e.x > -150);
   }
 
+  /** Amplitude/velocidade de um par NOVO do Vaivém, conforme a pontuação
+   * atual — cada par trava esses valores ao nascer (ver spawnOscilantePair);
+   * os primeiros OSC_CALM_PAIRS da partida têm amplitude limitada, pra dar
+   * tempo do jogador se acostumar. */
+  function getOscDifficulty(score: number, pairIndex: number): { amplitude: number; velocidade: number } {
+    let amplitude = Math.min(OSC_AMPLITUDE_MAX, OSC_AMPLITUDE_START + score * OSC_AMPLITUDE_PER_SCORE);
+    if (pairIndex < OSC_CALM_PAIRS) amplitude = Math.min(amplitude, OSC_CALM_AMPLITUDE_MAX);
+    const velocidade = Math.min(OSC_SPEED_MAX, OSC_SPEED_START + score * OSC_SPEED_RAMP_PER_SCORE);
+    return { amplitude, velocidade };
+  }
+
+  /**
+   * Nasce um par novo do Vaivém. Se já existir um evento especial pendente
+   * (CRASH!/ALTA! — decidido com ~1s de antecedência em updateOscilanteMode)
+   * e o aviso já tiver terminado de piscar, ESTE par vira o par-evento: nasce
+   * com oscEventKind definido, e updateOscilantePillar cuida do movimento
+   * rápido até o limite em vez do seno normal.
+   */
+  function spawnOscilantePair(width: number, height: number, now: number) {
+    const usable = height - GROUND_HEIGHT - OSC_MARGIN * 2 - PILLAR_GAP;
+    const gapY = OSC_MARGIN + PILLAR_GAP / 2 + Math.random() * Math.max(usable, 0);
+    const { amplitude, velocidade } = getOscDifficulty(scoreRef.current, oscPairIndexRef.current);
+
+    const pending = oscPendingEventRef.current;
+    const isEventPair = !!pending && now >= pending.triggerAt;
+    let eventKind: OscEventKind | undefined;
+    if (isEventPair && pending) {
+      eventKind = pending.kind;
+      oscPendingEventRef.current = null;
+      oscLastWasEventRef.current = true;
+      const sfx = getAudioContext(sfxContextRef);
+      if (sfx && !mutedRef.current) playMarketEventSound(sfx, eventKind);
+    } else {
+      oscLastWasEventRef.current = false;
+    }
+
+    pillarsRef.current.push({
+      x: width + PILLAR_WIDTH,
+      gapY,
+      gapYBase: gapY,
+      oscPhase: Math.random() * Math.PI * 2,
+      oscAmplitude: amplitude,
+      oscVelocidade: velocidade,
+      passed: false,
+      coinCollected: false,
+      coinPhase: Math.random() * Math.PI * 2,
+      oscEventKind: eventKind,
+      oscEventStartedAt: eventKind ? now : undefined,
+      oscEventStartFrom: eventKind ? gapY : undefined,
+    });
+    oscPairIndexRef.current += 1;
+
+    // Só conta pares "normais" pro cooldown do próximo evento — nunca dispara
+    // dois seguidos (o par-evento reseta o contador, não o incrementa).
+    if (eventKind) {
+      oscPairsSinceEventRef.current = 0;
+      oscEventCooldownRef.current =
+        OSC_EVENT_COOLDOWN_MIN + Math.floor(Math.random() * (OSC_EVENT_COOLDOWN_MAX - OSC_EVENT_COOLDOWN_MIN + 1));
+    } else {
+      oscPairsSinceEventRef.current += 1;
+      if (
+        scoreRef.current >= OSC_EVENT_MIN_SCORE &&
+        !oscPendingEventRef.current &&
+        !oscLastWasEventRef.current &&
+        oscPairsSinceEventRef.current >= oscEventCooldownRef.current
+      ) {
+        const kind: OscEventKind = Math.random() < 0.5 ? "crash" : "alta";
+        oscPendingEventRef.current = { kind, decidedAt: now, triggerAt: now + OSC_EVENT_WARNING_MS };
+      }
+    }
+  }
+
+  /** Física de um par do Vaivém: ou o movimento rápido de um evento especial
+   * em andamento, ou (o caso normal) o seno com a amplitude/velocidade
+   * próprias que o par travou ao nascer. `oscTimeRef` é um relógio em
+   * "frames" (não segundos de relógio) — pensado assim porque as velocidades
+   * pedidas (0.02 a 0.045) são baixas demais pra gerar um vaivém perceptível
+   * se aplicadas a segundos reais; como "frames a 60fps" o período fica entre
+   * ~2 e ~5s, o que de fato parece um vaivém. */
+  function updateOscilantePillar(p: Pillar, height: number, now: number) {
+    if (p.oscEventKind && p.oscEventStartedAt !== undefined && p.oscEventStartFrom !== undefined) {
+      const t = Math.min(1, (now - p.oscEventStartedAt) / OSC_EVENT_MOVE_MS);
+      const eased = 1 - (1 - t) * (1 - t);
+      const minGapY = OSC_MARGIN + PILLAR_GAP / 2;
+      const maxGapY = height - GROUND_HEIGHT - OSC_MARGIN - PILLAR_GAP / 2;
+      const target = p.oscEventKind === "crash" ? maxGapY : minGapY;
+      p.gapY = p.oscEventStartFrom + (target - p.oscEventStartFrom) * eased;
+      if (t >= 1) {
+        // Evento terminou: volta a oscilar a partir de ONDE PAROU (sem
+        // "pular") — recentraliza a base e escolhe a fase pra o seno começar
+        // valendo 0 nesse instante.
+        p.gapYBase = p.gapY;
+        p.oscPhase = -(oscTimeRef.current * (p.oscVelocidade ?? OSC_SPEED_START));
+        p.oscEventKind = undefined;
+        p.oscEventStartedAt = undefined;
+        p.oscEventStartFrom = undefined;
+      }
+      return;
+    }
+    if (p.gapYBase !== undefined) {
+      const velocidade = p.oscVelocidade ?? OSC_SPEED_START;
+      const amplitude = p.oscAmplitude ?? OSC_AMPLITUDE_START;
+      const raw = p.gapYBase + Math.sin(oscTimeRef.current * velocidade + (p.oscPhase ?? 0)) * amplitude;
+      const minGapY = OSC_MARGIN + PILLAR_GAP / 2;
+      const maxGapY = height - GROUND_HEIGHT - OSC_MARGIN - PILLAR_GAP / 2;
+      p.gapY = Math.min(maxGapY, Math.max(minGapY, raw));
+    }
+  }
+
+  /** Direção atual do vão (derivada do seno) — ▲ verde quando gapY está
+   * DIMINUINDO (vão subindo na tela), ▼ vermelho quando está aumentando
+   * (descendo). Perto da virada (|cos| pequeno) a seta fica semitransparente.
+   * Durante um evento especial a direção é a do próprio evento, sem fade. */
+  function getOscDirection(p: Pillar): { up: boolean; alpha: number } | null {
+    if (p.oscEventKind) return { up: p.oscEventKind === "alta", alpha: 1 };
+    if (p.oscVelocidade === undefined || p.oscPhase === undefined) return null;
+    const cos = Math.cos(oscTimeRef.current * p.oscVelocidade + p.oscPhase);
+    return { up: cos < 0, alpha: Math.abs(cos) < OSC_ARROW_TURN_THRESHOLD ? 0.3 : 1 };
+  }
+
+  function drawOscArrow(ctx: CanvasRenderingContext2D, x: number, y: number, up: boolean, alpha: number) {
+    const half = OSC_ARROW_SIZE / 2;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = up ? OSC_UP_COLOR : OSC_DOWN_COLOR;
+    ctx.beginPath();
+    if (up) {
+      ctx.moveTo(x, y - half);
+      ctx.lineTo(x - half, y + half);
+      ctx.lineTo(x + half, y + half);
+    } else {
+      ctx.moveTo(x, y + half);
+      ctx.lineTo(x - half, y - half);
+      ctx.lineTo(x + half, y - half);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /** Linha fina ligando os centros dos vãos dos pares visíveis (como um
+   * gráfico de ações) — verde no trecho que sobe, vermelho no que desce, com
+   * pontinhos em cada centro. Fica atrás das pilastras, na frente do cenário. */
+  function drawOscChartLine(ctx: CanvasRenderingContext2D, pillars: Pillar[]) {
+    const points = pillars.filter((p): p is Pillar & { gapY: number } => p.gapY !== undefined);
+    if (points.length === 0) return;
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      ctx.strokeStyle = b.gapY < a.gapY ? OSC_UP_COLOR : OSC_DOWN_COLOR;
+      ctx.beginPath();
+      ctx.moveTo(a.x + PILLAR_WIDTH / 2, a.gapY);
+      ctx.lineTo(b.x + PILLAR_WIDTH / 2, b.gapY);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      const prev = points[i - 1];
+      ctx.fillStyle = prev ? (p.gapY < prev.gapY ? OSC_UP_COLOR : OSC_DOWN_COLOR) : colorsRef.current.border;
+      ctx.beginPath();
+      ctx.arc(p.x + PILLAR_WIDTH / 2, p.gapY, OSC_CHART_DOT_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /** Aviso "CRASH! ▼" / "ALTA! ▲" no centro-direito da tela, piscando 3 vezes
+   * ao longo de OSC_EVENT_WARNING_MS antes do par-evento nascer de verdade. */
+  function drawOscEventWarning(ctx: CanvasRenderingContext2D, width: number, height: number) {
+    const pending = oscPendingEventRef.current;
+    if (!pending) return;
+    const elapsed = performance.now() - pending.decidedAt;
+    if (elapsed >= OSC_EVENT_WARNING_MS) return; // já destravou, só esperando o par nascer
+    const cycle = OSC_EVENT_WARNING_MS / 6; // 3 piscadas = 6 meios-ciclos
+    if (Math.floor(elapsed / cycle) % 2 !== 0) return;
+
+    const isCrash = pending.kind === "crash";
+    const text = isCrash ? "CRASH! ▼" : "ALTA! ▲";
+    ctx.save();
+    ctx.font = "bold 28px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#ffffff";
+    ctx.strokeText(text, width * 0.68, height * 0.4);
+    ctx.fillStyle = isCrash ? OSC_DOWN_COLOR : OSC_UP_COLOR;
+    ctx.fillText(text, width * 0.68, height * 0.4);
+    ctx.restore();
+  }
+
+  /** Loop completo do modo Vaivém: nascimento dos pares (incl. eventos
+   * especiais), física do seno (ou do evento) de cada um, moeda seguindo o
+   * vão, pontuação e sino de pregão a cada 10 pontos. Mutuamente exclusivo
+   * com o Clássico/Caos. */
+  function updateOscilanteMode(dt: number, width: number, height: number, bird: Bird, speed: number, birdX: number) {
+    oscTimeRef.current += dt * 60;
+    const now = performance.now();
+
+    distanceRef.current += speed * dt;
+    if (distanceRef.current >= PILLAR_SPACING) {
+      distanceRef.current = 0;
+      spawnOscilantePair(width, height, now);
+    }
+
+    for (const p of pillarsRef.current) {
+      p.x -= speed * dt;
+      updateOscilantePillar(p, height, now);
+      if (!p.passed && p.x + PILLAR_WIDTH < birdX) {
+        p.passed = true;
+        if (p.gapY !== undefined) chartHistoryRef.current.push(p.gapY);
+        registerObstaclePassed();
+        if (scoreRef.current % 10 === 0 && oscBellScoreRef.current !== scoreRef.current) {
+          oscBellScoreRef.current = scoreRef.current;
+          const sfx = getAudioContext(sfxContextRef);
+          if (sfx && !mutedRef.current) playBellDing(sfx);
+        }
+      }
+      // Moeda do vão — se move junto com ele, já que usa p.gapY (recalculado
+      // acima, ANTES desta checagem, a cada frame).
+      if (!p.coinCollected && p.gapY !== undefined) {
+        const coinX = p.x + PILLAR_WIDTH / 2;
+        const dx = coinX - birdX;
+        const dy = p.gapY - bird.y;
+        if (Math.sqrt(dx * dx + dy * dy) < BIRD_RADIUS + COIN_RADIUS) {
+          p.coinCollected = true;
+          coinsRef.current += 1;
+          setCoins(coinsRef.current);
+          const sfx = getAudioContext(sfxContextRef);
+          if (sfx) playCoinSound(sfx);
+        }
+      }
+    }
+    pillarsRef.current = pillarsRef.current.filter((p) => p.x + PILLAR_WIDTH > -10);
+  }
+
   function update(dt: number) {
     if (gameStateRef.current !== "playing" || freezeRef.current) return;
     const { width, height } = sizeRef.current;
@@ -862,6 +1228,8 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
     if (performance.now() >= pillarsStartAtRef.current) {
       if (mode === "caotico") {
         updateChaosMode(dt, width, height, bird, speed, birdX);
+      } else if (mode === "oscilante") {
+        updateOscilanteMode(dt, width, height, bird, speed, birdX);
       } else {
         distanceRef.current += speed * dt;
         if (distanceRef.current >= PILLAR_SPACING) {
@@ -871,8 +1239,6 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
           pillarsRef.current.push({
             x: width + PILLAR_WIDTH,
             gapY,
-            gapYBase: mode === "oscilante" ? gapY : undefined,
-            oscPhase: mode === "oscilante" ? Math.random() * Math.PI * 2 : undefined,
             passed: false,
             coinCollected: false,
             coinPhase: Math.random() * Math.PI * 2,
@@ -881,18 +1247,9 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
       }
     }
 
-    if (mode !== "caotico") {
+    if (mode === "classico") {
       for (const p of pillarsRef.current) {
         p.x -= speed * dt;
-        // Vaivém: o vão sobe/desce em torno do centro sorteado na criação,
-        // sempre dentro dos mesmos limites seguros do spawn normal.
-        if (p.gapYBase !== undefined) {
-          const t = performance.now() / 1000;
-          const raw = p.gapYBase + Math.sin(t * OSC_SPEED + (p.oscPhase ?? 0)) * OSC_AMPLITUDE;
-          const minGapY = PILLAR_MARGIN + PILLAR_GAP / 2;
-          const maxGapY = height - GROUND_HEIGHT - PILLAR_MARGIN - PILLAR_GAP / 2;
-          p.gapY = Math.min(maxGapY, Math.max(minGapY, raw));
-        }
         if (!p.passed && p.x + PILLAR_WIDTH < birdX) {
           p.passed = true;
           registerObstaclePassed();
@@ -914,7 +1271,9 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
       pillarsRef.current = pillarsRef.current.filter((p) => p.x + PILLAR_WIDTH > -10);
     }
 
-    const hitPillar = checkCollision(bird, pillarsRef.current, width, height);
+    // Vaivém usa uma hitbox 2-3px menor nas laterais (pedido explícito, só
+    // pra esse modo) — os outros passam inset 0 (comportamento inalterado).
+    const hitPillar = checkCollision(bird, pillarsRef.current, width, height, mode === "oscilante" ? OSC_COLLISION_INSET : 0);
     const hitChaosEnemy = mode === "caotico" && checkChaosCollision(bird, chaosEnemiesRef.current, birdX);
     if (hitPillar || hitChaosEnemy) {
       triggerCollisionEnd();
@@ -1274,23 +1633,31 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
     ctx.save();
     ctx.translate(shakeX, shakeY);
 
-    let anyLayerReady = false;
+    // Fundo sólido primeiro (cobre qualquer folga caso a arte não preencha a
+    // largura toda), depois o céu FIXO (não ladrilha, não rola — ver SKY_SRC)
+    // e por cima as camadas que realmente rolam em paralaxe.
+    ctx.fillStyle = colorsRef.current.bg;
+    ctx.fillRect(0, 0, width, height);
+
+    const skyImg = skyImgRef.current;
+    if (skyImg?.complete && skyImg.naturalWidth > 0) {
+      const skyScale = height / SCENE_NATIVE_H;
+      const skyDrawW = SCENE_NATIVE_W * skyScale;
+      const skyX = width - skyDrawW - SKY_RIGHT_MARGIN;
+      ctx.drawImage(skyImg, skyX, 0, skyDrawW, height);
+    }
+
     PARALLAX_LAYERS.forEach((layer, i) => {
       const img = parallaxImgsRef.current[i];
-      if (img && drawParallaxLayer(ctx, img, layer.speedFactor, width, height)) {
-        anyLayerReady = true;
-      }
+      if (img) drawParallaxLayer(ctx, img, layer.speedFactor, width, height);
     });
-    if (!anyLayerReady) {
-      ctx.fillStyle = colorsRef.current.bg;
-      ctx.fillRect(0, 0, width, height);
-    }
 
     const groundY = height - GROUND_HEIGHT;
     const mode = gameModeRef.current;
 
-    // Ordem de camadas: fundo → moedas → inimigos → pássaro → chão → HUD
-    // (o placar/HUD é DOM, fica por cima naturalmente).
+    // Ordem de camadas (pedido explícito, vale pro jogo todo): fundo →
+    // [linha do gráfico, só Vaivém] → moedas/inimigos/pilastras → pássaro →
+    // chão → HUD (placar/ticker são DOM, ficam por cima naturalmente).
     if (mode === "caotico") {
       for (const coin of chaosCoinsRef.current) {
         if (!coin.collected) drawCoin(ctx, coin.x, coin.y, coin.phase);
@@ -1308,6 +1675,7 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
         }
       }
     } else {
+      if (mode === "oscilante") drawOscChartLine(ctx, pillarsRef.current);
       for (const p of pillarsRef.current) {
         if (p.gapY !== undefined) {
           const gapTop = p.gapY - PILLAR_GAP / 2;
@@ -1315,15 +1683,23 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
           drawPillarSegment(ctx, p.x, 0, PILLAR_WIDTH, gapTop, "bottom");
           drawPillarSegment(ctx, p.x, gapBottom, PILLAR_WIDTH, groundY - gapBottom, "top");
           if (!p.coinCollected) drawCoin(ctx, p.x + PILLAR_WIDTH / 2, p.gapY, p.coinPhase);
+          if (mode === "oscilante") {
+            const direction = getOscDirection(p);
+            if (direction) {
+              const arrowX = p.x + PILLAR_WIDTH / 2;
+              drawOscArrow(ctx, arrowX, gapBottom - OSC_ARROW_OFFSET, direction.up, direction.alpha);
+              drawOscArrow(ctx, arrowX, gapTop + OSC_ARROW_OFFSET, direction.up, direction.alpha);
+            }
+          }
         }
       }
+      if (mode === "oscilante") drawOscEventWarning(ctx, width, height);
     }
 
-    // Chão desenhado ANTES do pássaro (não depois, apesar da ordem pedida) —
-    // se fosse depois, durante o screen shake de uma colisão COM O CHÃO o
-    // pássaro ficaria escondido atrás da textura opaca do chão bem na hora
-    // que devia estar mais visível. "Mantenha... o pássaro... exatamente
-    // como está" também pedia isso implicitamente (era assim antes).
+    drawBird(ctx, birdRef.current, width);
+
+    // Chão por último (antes só do HUD, que é DOM) — cobre a base das
+    // pilastras/pássaro, exatamente a ordem pedida.
     const groundImg = groundTextureImgRef.current;
     if (groundImg?.complete && groundImg.naturalWidth > 0) {
       const groundScale = GROUND_HEIGHT / GROUND_TEXTURE_NATIVE_H;
@@ -1336,8 +1712,6 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
       ctx.fillStyle = colorsRef.current.border;
       ctx.fillRect(0, groundY, width, GROUND_HEIGHT);
     }
-
-    drawBird(ctx, birdRef.current, width);
 
     ctx.restore();
   }
@@ -1626,10 +2000,49 @@ export function FlappyGame({ onExit }: { onExit: () => void }) {
             transition={{ duration: 0.25, ease: "easeOut" }}
             className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/40 px-6 text-center backdrop-blur-sm"
           >
-            <p className="text-2xl font-bold text-white">Pontuação: {score}</p>
-            <p className="text-sm text-white/80">
-              Seu recorde ({getGameMode(selectedMode).nome}): {Math.max(bestByMode[selectedMode] ?? 0, score)}
-            </p>
+            {selectedMode === "oscilante" ? (
+              <>
+                <p className="flex items-center gap-2 text-xl font-bold text-white">
+                  Sua ação fechou em {score} pontos
+                  <span style={{ color: isNewRecord ? OSC_UP_COLOR : OSC_DOWN_COLOR }}>
+                    {isNewRecord ? "▲" : "▼"}
+                  </span>
+                </p>
+                {oscChartSnapshot.length >= 2 &&
+                  (() => {
+                    const w = 200;
+                    const h = 50;
+                    const min = Math.min(...oscChartSnapshot);
+                    const max = Math.max(...oscChartSnapshot);
+                    const range = Math.max(max - min, 1);
+                    const points = oscChartSnapshot
+                      .map((v, i) => {
+                        const x = (i / (oscChartSnapshot.length - 1)) * w;
+                        const y = ((v - min) / range) * (h - 6) + 3;
+                        return `${x},${y}`;
+                      })
+                      .join(" ");
+                    const closedUp = oscChartSnapshot[oscChartSnapshot.length - 1] < oscChartSnapshot[0];
+                    return (
+                      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="my-1">
+                        <polyline
+                          points={points}
+                          fill="none"
+                          stroke={closedUp ? OSC_UP_COLOR : OSC_DOWN_COLOR}
+                          strokeWidth={2}
+                        />
+                      </svg>
+                    );
+                  })()}
+              </>
+            ) : (
+              <>
+                <p className="text-2xl font-bold text-white">Pontuação: {score}</p>
+                <p className="text-sm text-white/80">
+                  Seu recorde ({getGameMode(selectedMode).nome}): {Math.max(bestByMode[selectedMode] ?? 0, score)}
+                </p>
+              </>
+            )}
             {coins > 0 && (
               <p className="text-sm text-white/80">
                 🪙 {coins} nessa partida · {totalCoinsAtGameOver ?? myCoins + coins} no total
