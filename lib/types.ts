@@ -1,7 +1,5 @@
 export type TransactionType = "receita" | "despesa";
 
-export type FormaPagamento = "credito" | "debito";
-
 export type Transaction = {
   id: string;
   userId: string;
@@ -18,10 +16,6 @@ export type Transaction = {
   recorrenteFim?: string;
   /** Frequência da recorrência. Ausente = "mensal" (padrão histórico). */
   recorrenciaIntervalo?: "mensal" | "anual";
-  /** Banco/instituição associada a esta despesa (opcional) */
-  bancoId?: string;
-  /** Crédito conta na fatura do banco; débito é pagamento imediato e não conta. Padrão: crédito. */
-  formaPagamento?: FormaPagamento;
   /** Agrupa todas as parcelas de uma mesma compra parcelada (ou empréstimo, ver `emprestimoId`) */
   compraId?: string;
   parcelaAtual?: number;
@@ -74,36 +68,16 @@ export type Category = {
   criadoEm: number;
 };
 
-export type Bank = {
-  id: string;
-  userId: string;
-  nome: string;
-  /** Saldo anterior/ajuste manual — dívida não coberta por transações rastreadas. */
-  saldoDevedor: number;
-  /** Ajuste manual do saldo em conta — base sobre a qual receitas/débitos/caixinhas somam. */
-  saldoContaInicial?: number;
-  /**
-   * Dia do mês (1-31) em que a fatura fecha. Compra no crédito depois desse
-   * dia entra na fatura do mês seguinte. Sem isso definido, a fatura agrupa
-   * por mês corrido (comportamento antigo).
-   */
-  diaFechamento?: number;
-  /** Oculta o banco das seções de resumo do Dashboard sem deixar de contar no patrimônio. */
-  oculto?: boolean;
-  criadoEm: number;
-};
-
 /**
- * Movimento de uma caixinha: depósito/retirada (opcionalmente ligados a um
- * banco) ou "rendimento" — ajuste do saldo atual informado pelo usuário para
- * refletir o que a caixinha rendeu, sem contar como aporte novo. Para
- * rendimento, `valor` é o delta (pode ser negativo) e não tem `bancoId`.
+ * Movimento de uma caixinha: depósito/retirada ou "rendimento" — ajuste do
+ * saldo atual informado pelo usuário para refletir o que a caixinha rendeu,
+ * sem contar como aporte novo. Para rendimento, `valor` é o delta (pode ser
+ * negativo).
  */
 export type PocketMovement = {
   id: string;
   userId: string;
   pocketId: string;
-  bancoId?: string;
   tipo: "deposito" | "retirada" | "rendimento";
   valor: number;
   /** ISO date string (yyyy-MM-dd) */
@@ -119,39 +93,8 @@ export type Pocket = {
   saldo: number;
   /** Valor-alvo opcional, para mostrar uma barra de progresso. */
   metaValor?: number;
-  /** Oculta a caixinha das seções de resumo do Dashboard sem deixar de contar no patrimônio. */
+  /** Só esmaece a caixinha na lista — continua contando no total guardado. */
   oculto?: boolean;
-  criadoEm: number;
-};
-
-/**
- * Pagamento de fatura/dívida de cartão (sai do saldo em conta do banco) ou
- * ajuste manual da fatura exibida (não mexe no saldo em conta — `valor: 0`).
- * `aplicadoFatura` é quanto isso reduz (ou aumenta, se negativo) a fatura
- * exibida do mês em que `data` cai — permite a fatura "descontar" o que já
- * foi pago, e corrigir na mão quando o cálculo automático não bateu.
- */
-export type BankPayment = {
-  id: string;
-  userId: string;
-  bancoId: string;
-  valor: number;
-  aplicadoFatura?: number;
-  tipo?: "pagamento" | "ajuste";
-  /** ISO date string (yyyy-MM-dd) */
-  data: string;
-  criadoEm: number;
-};
-
-/** Transferência de saldo em conta de um banco para outro. */
-export type BankTransfer = {
-  id: string;
-  userId: string;
-  fromBancoId: string;
-  toBancoId: string;
-  valor: number;
-  /** ISO date string (yyyy-MM-dd) */
-  data: string;
   criadoEm: number;
 };
 
@@ -191,7 +134,7 @@ export type Investment = {
   totalCotas?: number;
   /** Valor atual informado pelo usuário (cotação/saldo real). Ausente até o primeiro rendimento registrado. */
   saldoAtual?: number;
-  /** Oculta o investimento das seções de resumo do Dashboard sem deixar de contar no patrimônio. */
+  /** Só esmaece o investimento na lista — continua contando no valor total. */
   oculto?: boolean;
   criadoEm: number;
 };
@@ -209,8 +152,6 @@ export type InvestmentMovement = {
   valor: number;
   /** Quantidade de cotas/ações desse movimento, quando aplicável. */
   cotas?: number;
-  /** Banco de onde saiu (aporte) ou pra onde voltou (resgate) o dinheiro, quando informado. */
-  bancoId?: string;
   /**
    * Delta real aplicado a `valorInvestido` nesse movimento (só em aporte/resgate).
    * Guardado explicitamente porque um resgate que supera o custo investido é
@@ -223,25 +164,6 @@ export type InvestmentMovement = {
   /** ISO date string (yyyy-MM-dd) */
   data: string;
   criadoEm: number;
-};
-
-/**
- * Retrato do patrimônio num mês — um documento por usuário+mês (id
- * `${userId}_${monthKey}`), atualizado sempre que o app é aberto naquele mês.
- * Meses passados ficam congelados no último valor visto; sem isso não dava
- * pra montar um gráfico de evolução, só o valor de agora.
- */
-export type PatrimonioSnapshot = {
-  id: string;
-  userId: string;
-  monthKey: string;
-  contas: number;
-  caixinhas: number;
-  investimentos: number;
-  dividas: number;
-  total: number;
-  criadoEm: number;
-  atualizadoEm: number;
 };
 
 /**

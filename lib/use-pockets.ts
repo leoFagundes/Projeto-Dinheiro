@@ -57,10 +57,6 @@ export function usePockets() {
     [user],
   );
 
-  const adjustSaldo = useCallback(async (id: string, delta: number) => {
-    await updateDoc(doc(db, COLLECTION, id), { saldo: increment(delta) });
-  }, []);
-
   const updatePocket = useCallback(
     async (id: string, input: { nome: string; saldo: number; metaValor?: number }) => {
       await updateDoc(doc(db, COLLECTION, id), {
@@ -123,18 +119,9 @@ export function usePockets() {
     });
   }, []);
 
-  /**
-   * Deposita ou retira dinheiro de uma caixinha vinculando o movimento a um
-   * banco, para que o saldo em conta desse banco reflita a transferência.
-   */
+  /** Deposita ou retira dinheiro de uma caixinha, registrando o movimento no histórico dela. */
   const moveFunds = useCallback(
-    async (
-      pocketId: string,
-      bancoId: string,
-      tipo: "deposito" | "retirada",
-      valor: number,
-      data: string = todayIsoDate(),
-    ) => {
+    async (pocketId: string, tipo: "deposito" | "retirada", valor: number, data: string = todayIsoDate()) => {
       if (!user) return;
       await runTransaction(db, async (transaction) => {
         const pocketRef = doc(db, COLLECTION, pocketId);
@@ -149,7 +136,6 @@ export function usePockets() {
         transaction.set(doc(collection(db, "pocketMovements")), {
           userId: user.uid,
           pocketId,
-          bancoId,
           tipo,
           valor,
           data,
@@ -200,7 +186,6 @@ export function usePockets() {
     pockets,
     loading,
     addPocket,
-    adjustSaldo,
     updatePocket,
     removePocket,
     setPocketOculto,

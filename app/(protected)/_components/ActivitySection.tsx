@@ -17,7 +17,6 @@ export function ActivitySection({
   onDeleteTransaction,
   colorByCategoria,
   iconByCategoria,
-  bankNameById,
   originDateById,
 }: {
   upcomingEvents: CalendarEvent[];
@@ -25,7 +24,6 @@ export function ActivitySection({
   onDeleteTransaction: (id: string) => Promise<void>;
   colorByCategoria: Map<string, string>;
   iconByCategoria: Map<string, string>;
-  bankNameById: Map<string, string>;
   originDateById?: Map<string, string>;
 }) {
   const [tab, setTab] = useState<Tab>("proximos");
@@ -78,7 +76,6 @@ export function ActivitySection({
           events={upcomingEvents}
           colorByCategoria={colorByCategoria}
           iconByCategoria={iconByCategoria}
-          bankNameById={bankNameById}
         />
       ) : (
         <RecentTransactions
@@ -86,7 +83,6 @@ export function ActivitySection({
           onDelete={onDeleteTransaction}
           colorByCategoria={colorByCategoria}
           iconByCategoria={iconByCategoria}
-          bankNameById={bankNameById}
           originDateById={originDateById}
         />
       )}

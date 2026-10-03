@@ -15,7 +15,6 @@ import {
   MessageSquareText,
   Monitor,
   Moon,
-  Plus,
   ShieldCheck,
   Smartphone,
   Sun,
@@ -44,6 +43,7 @@ import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import { PageFade } from "@/app/_components/PageFade";
 import { ConfirmDialog } from "@/app/_components/ConfirmDialog";
 import { EmojiPickerSheet } from "@/app/_components/EmojiPickerSheet";
+import { CategoryCreateForm } from "@/app/_components/CategoryCreateForm";
 import { BottomSheet } from "@/app/_components/BottomSheet";
 import {
   INPUT_CLASS,
@@ -53,7 +53,7 @@ import {
   RowActionButtons,
   ToggleSwitch,
 } from "@/app/_components/SettingsFormKit";
-import type { Category, FeedbackTipo, TransactionType } from "@/lib/types";
+import type { Category, FeedbackTipo } from "@/lib/types";
 
 export default function ConfiguracoesPage() {
   return (
@@ -79,32 +79,8 @@ function CategoriasSection() {
   const { categories, addCategory, removeCategory, updateCategory } = useCategories();
   const { goals, overrides, removeGoal, removeGoalOverride, renameGoalCategoria } =
     useCategoryGoals();
-  const [nome, setNome] = useState("");
-  const [tipo, setTipo] = useState<TransactionType>("despesa");
-  const [icone, setIcone] = useState(FALLBACK_CATEGORY_ICON);
-  const [pickingIcon, setPickingIcon] = useState(false);
   const [removing, setRemoving] = useState<{ id: string; nome: string } | null>(null);
   const [editing, setEditing] = useState<Category | null>(null);
-
-  async function handleAdd(event: React.FormEvent) {
-    event.preventDefault();
-    const nomeNormalizado = nome.trim();
-    if (!nomeNormalizado) {
-      toast.error("Dê um nome para a categoria.");
-      return;
-    }
-    const duplicada = categories.some(
-      (c) => c.tipo === tipo && c.nome.toLowerCase() === nomeNormalizado.toLowerCase(),
-    );
-    if (duplicada) {
-      toast.error(`Já existe uma categoria de ${tipo} com esse nome.`);
-      return;
-    }
-    await addCategory(nomeNormalizado, tipo, icone);
-    toast.success("Categoria criada.");
-    setNome("");
-    setIcone(FALLBACK_CATEGORY_ICON);
-  }
 
   async function handleUpdateCategory(id: string, input: { nome: string; icone: string }) {
     const original = categories.find((c) => c.id === id);
@@ -132,44 +108,9 @@ function CategoriasSection() {
 
   return (
     <SectionCard icon={Tags} title="Categorias">
-      <form onSubmit={handleAdd} className="mb-4 flex flex-col gap-2">
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setPickingIcon(true)}
-            aria-label="Escolher ícone"
-            className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-bg text-lg transition-transform active:scale-95"
-          >
-            {icone}
-          </button>
-          <input
-            type="text"
-            placeholder="Nova categoria"
-            value={nome}
-            onChange={(event) => setNome(event.target.value)}
-            className={`min-w-0 flex-1 ${INPUT_CLASS_COMPACT}`}
-          />
-        </div>
-        <div className="flex gap-2">
-          <select
-            value={tipo}
-            onChange={(event) => setTipo(event.target.value as TransactionType)}
-            className="min-w-0 flex-1 rounded-2xl border border-border bg-bg px-3 py-2.5 text-sm outline-none transition-colors focus:border-accent"
-          >
-            <option value="despesa">Despesa</option>
-            <option value="receita">Receita</option>
-          </select>
-          <button
-            type="submit"
-            className="flex shrink-0 items-center justify-center rounded-2xl bg-accent px-4 text-white transition-transform active:scale-95 hover:bg-accent-strong"
-            aria-label="Adicionar categoria"
-          >
-            <Plus size={18} />
-          </button>
-        </div>
-      </form>
-
-      <EmojiPickerSheet open={pickingIcon} onClose={() => setPickingIcon(false)} onSelect={setIcone} />
+      <div className="mb-4">
+        <CategoryCreateForm categories={categories} onCreate={addCategory} />
+      </div>
 
       <div className="flex flex-col gap-4 text-sm">
         <div>
@@ -541,7 +482,7 @@ function DadosSection() {
         <div>
           <p className="text-sm font-medium">Baixar backup</p>
           <p className="mb-2 mt-0.5 text-xs text-ink-muted">
-            Um arquivo com tudo — transações, bancos, caixinhas, investimentos e mais.
+            Um arquivo com tudo — transações, caixinhas, investimentos e mais.
           </p>
           <button onClick={handleExport} disabled={exporting} className={SAVE_BUTTON_CLASS}>
             {exporting ? "Gerando…" : "Baixar backup"}
@@ -999,7 +940,7 @@ function ContaSection() {
       <div className="mt-3 rounded-card border border-negative bg-negative-soft p-4">
         <p className="text-sm font-medium text-negative">Zona de perigo</p>
         <p className="mb-3 mt-0.5 text-xs text-ink-muted">
-          Exclui sua conta e todos os seus dados — bancos, transações, investimentos, tudo. Não
+          Exclui sua conta e todos os seus dados — transações, caixinhas, investimentos, tudo. Não
           tem como desfazer.
         </p>
         <button
@@ -1129,7 +1070,7 @@ function DeleteAccountFields({ onClose }: { onClose: () => void }) {
     <div className="flex flex-col gap-3">
       <p className="font-medium text-negative">Excluir conta permanentemente</p>
       <p className="text-xs text-ink-muted">
-        Isso apaga tudo — transações, bancos, caixinhas, investimentos, assinaturas — e encerra
+        Isso apaga tudo — transações, caixinhas, investimentos, assinaturas — e encerra
         seu login. Se quiser guardar seus dados antes, baixe um backup em Ajustes → Dados.
       </p>
 

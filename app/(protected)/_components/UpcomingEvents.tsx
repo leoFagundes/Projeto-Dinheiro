@@ -10,12 +10,10 @@ export function UpcomingEvents({
   events,
   colorByCategoria,
   iconByCategoria,
-  bankNameById,
 }: {
   events: CalendarEvent[];
   colorByCategoria: Map<string, string>;
   iconByCategoria: Map<string, string>;
-  bankNameById: Map<string, string>;
 }) {
   if (events.length === 0) {
     return (
@@ -35,7 +33,6 @@ export function UpcomingEvents({
           const categoriaKey = categoryKey(event.tipo, event.categoria);
           const categoriaColor = colorByCategoria.get(categoriaKey) ?? FALLBACK_CATEGORY_COLOR;
           const categoriaIcon = iconByCategoria.get(categoriaKey) ?? FALLBACK_CATEGORY_ICON;
-          const bancoNome = event.bancoId ? bankNameById.get(event.bancoId) : undefined;
           return (
             <li
               key={event.id}
@@ -55,18 +52,12 @@ export function UpcomingEvents({
                     )}
                     <span className="truncate">{event.descricao}</span>
                   </span>
-                  <span className="flex flex-wrap items-center gap-1 text-xs text-ink-muted">
+                  <span className="block text-xs text-ink-muted">
                     {event.categoria} · {formatDate(event.data)}
                     {event.origem === "recorrencia" ? " · previsto" : ""}
                     {event.parcelaTotal
                       ? ` · parcela ${event.parcelaAtual}/${event.parcelaTotal}`
                       : ""}
-                    {bancoNome && (
-                      <span className="rounded-full bg-bg px-1.5 py-0.5 text-[11px]">
-                        {bancoNome}
-                        {event.formaPagamento === "debito" ? " · débito" : ""}
-                      </span>
-                    )}
                   </span>
                 </span>
               </span>

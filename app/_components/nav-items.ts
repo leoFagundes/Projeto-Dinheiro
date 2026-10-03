@@ -2,7 +2,6 @@ import {
   CalendarClock,
   Gamepad2,
   History,
-  Landmark,
   LayoutDashboard,
   PiggyBank,
   Repeat,
@@ -20,7 +19,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/investimentos", label: "Investir", icon: TrendingUp },
   { href: "/caixinhas", label: "Caixinhas", icon: PiggyBank },
   { href: "/calendario", label: "Agenda", icon: CalendarClock },
-  { href: "/bancos", label: "Bancos", icon: Landmark },
   { href: "/assinaturas", label: "Assinaturas", icon: Repeat },
   { href: "/configuracoes", label: "Ajustes", icon: Settings },
 ];

@@ -8,7 +8,7 @@ import type { PocketMovement } from "./types";
 
 const COLLECTION = "pocketMovements";
 
-/** Histórico de depósitos/retiradas entre caixinhas e bancos, usado para calcular o saldo em conta. */
+/** Histórico de depósitos/retiradas/rendimentos das caixinhas. */
 export function usePocketMovements() {
   const { user } = useAuth();
   const [movements, setMovements] = useState<PocketMovement[]>([]);

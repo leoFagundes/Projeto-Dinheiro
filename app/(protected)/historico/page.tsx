@@ -5,9 +5,6 @@ import { AnimatePresence, motion } from "motion/react";
 import { Download, Receipt, Search, X } from "lucide-react";
 import { useTransactions } from "@/lib/use-transactions";
 import { useCategories } from "@/lib/use-categories";
-import { useBanks } from "@/lib/use-banks";
-import { useBankPayments } from "@/lib/use-bank-payments";
-import { useBankTransfers } from "@/lib/use-bank-transfers";
 import { usePockets } from "@/lib/use-pockets";
 import { usePocketMovements } from "@/lib/use-pocket-movements";
 import { usePocketTransfers } from "@/lib/use-pocket-transfers";
@@ -30,42 +27,27 @@ import { TransactionListItem } from "@/app/_components/TransactionListItem";
 import { HistoryEntryRow } from "@/app/_components/HistoryEntryRow";
 import { PageFade } from "@/app/_components/PageFade";
 import { ListSkeleton } from "@/app/_components/Skeleton";
-import type { FormaPagamento } from "@/lib/types";
 
-type TipoFiltro =
-  | "todos"
-  | "receita"
-  | "despesa"
-  | "transferencia"
-  | "fatura"
-  | "caixinha"
-  | "investimento";
+type TipoFiltro = "todos" | "receita" | "despesa" | "transferencia" | "caixinha" | "investimento";
 
 const TIPO_FILTROS: { id: TipoFiltro; label: string }[] = [
   { id: "todos", label: "Tudo" },
   { id: "receita", label: "Receitas" },
   { id: "despesa", label: "Despesas" },
   { id: "transferencia", label: "Transferências" },
-  { id: "fatura", label: "Fatura" },
   { id: "caixinha", label: "Caixinhas" },
   { id: "investimento", label: "Investimentos" },
 ];
 
 function matchesTipoFiltro(entry: HistoryEntry, filtro: TipoFiltro): boolean {
   if (filtro === "todos") return true;
-  if (filtro === "fatura") return entry.tipo === "pagamento_fatura" || entry.tipo === "ajuste_fatura";
-  if (filtro === "transferencia") {
-    return entry.tipo === "transferencia" || entry.tipo === "transferencia_caixinha";
-  }
+  if (filtro === "transferencia") return entry.tipo === "transferencia_caixinha";
   return entry.tipo === filtro;
 }
 
 export default function HistoricoPage() {
   const { transactions, loading, deleteTransaction } = useTransactions();
   const { categories } = useCategories();
-  const { banks, deleteBankPayment, deleteBankTransfer } = useBanks();
-  const { payments: bankPayments } = useBankPayments();
-  const { transfers: bankTransfers } = useBankTransfers();
   const { pockets, deletePocketMovement, deletePocketTransfer } = usePockets();
   const { movements: pocketMovements } = usePocketMovements();
   const { transfers: pocketTransfers } = usePocketTransfers();
@@ -75,7 +57,6 @@ export default function HistoricoPage() {
   const [busca, setBusca] = useState("");
   const [tipoFiltro, setTipoFiltro] = useState<TipoFiltro>("todos");
   const [categoriaFiltro, setCategoriaFiltro] = useState("");
-  const [formaPagamentoFiltro, setFormaPagamentoFiltro] = useState<FormaPagamento | "">("");
 
   if (loading) {
     return (
@@ -94,29 +75,22 @@ export default function HistoricoPage() {
   const { receitas, despesas, saldoMes } = computeMonthTotals(transactions, monthKey);
   const colorByCategoria = assignCategoryColors(categories);
   const iconByCategoria = mapCategoryIcons(categories);
-  const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
   const originDateById = computeOriginDateById(transactions);
 
   const unified = computeUnifiedHistory({
     transactions,
-    banks,
     pockets,
     investments,
-    bankTransfers,
-    bankPayments,
     pocketMovements,
     investmentMovements,
     pocketTransfers,
-    onDeleteBankTransfer: deleteBankTransfer,
-    onDeleteBankPayment: deleteBankPayment,
     onDeletePocketMovement: deletePocketMovement,
     onDeleteInvestmentMovement: deleteInvestmentMovement,
     onDeletePocketTransfer: deletePocketTransfer,
   });
 
   const mostraCategoria = tipoFiltro === "todos" || tipoFiltro === "receita" || tipoFiltro === "despesa";
-  const mostraFormaPagamento = tipoFiltro === "todos" || tipoFiltro === "despesa";
-  const filtroAtivo = tipoFiltro !== "todos" || categoriaFiltro !== "" || formaPagamentoFiltro !== "";
+  const filtroAtivo = tipoFiltro !== "todos" || categoriaFiltro !== "";
 
   // Meses futuros ainda não têm transação real gerada pras assinaturas —
   // sem isso, avançar pros próximos meses no Histórico mostrava tudo vazio
@@ -128,7 +102,6 @@ export default function HistoricoPage() {
       if (!buscando && monthKeyOfIsoDate(entry.data) !== monthKey) return false;
       if (!matchesTipoFiltro(entry, tipoFiltro)) return false;
       if (categoriaFiltro && entry.categoria !== categoriaFiltro) return false;
-      if (formaPagamentoFiltro && entry.formaPagamento !== formaPagamentoFiltro) return false;
       if (buscando) {
         const alvo = `${entry.titulo} ${entry.categoria ?? ""}`.toLowerCase();
         if (!alvo.includes(termo)) return false;
@@ -148,13 +121,9 @@ export default function HistoricoPage() {
                 downloadMonthlyReportCsv({
                   transactions,
                   monthKey,
-                  banks,
                   pockets,
                   investments,
                   pocketMovements,
-                  bankPayments,
-                  investmentMovements,
-                  bankTransfers,
                 })
               }
               className="flex items-center gap-1.5 text-sm text-accent-strong transition-transform active:scale-95 hover:underline"
@@ -197,7 +166,6 @@ export default function HistoricoPage() {
               onClick={() => {
                 setTipoFiltro(id);
                 setCategoriaFiltro("");
-                setFormaPagamentoFiltro("");
               }}
               className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-transform active:scale-95 ${
                 tipoFiltro === id
@@ -210,43 +178,26 @@ export default function HistoricoPage() {
           ))}
         </div>
 
-        {(mostraCategoria || mostraFormaPagamento) && (
-          <div className="flex gap-2">
-            {mostraCategoria && (
-              <select
-                value={categoriaFiltro}
-                onChange={(event) => setCategoriaFiltro(event.target.value)}
-                className="min-w-0 flex-1 rounded-2xl border border-border bg-surface px-3 py-2 text-xs outline-none transition-colors focus:border-accent"
-              >
-                <option value="">Todas as categorias</option>
-                {categories
-                  .filter((c) => tipoFiltro === "todos" || c.tipo === tipoFiltro)
-                  .map((c) => (
-                    <option key={c.id} value={c.nome}>
-                      {c.icone ?? ""} {c.nome}
-                    </option>
-                  ))}
-              </select>
-            )}
-            {mostraFormaPagamento && (
-              <select
-                value={formaPagamentoFiltro}
-                onChange={(event) =>
-                  setFormaPagamentoFiltro(event.target.value as FormaPagamento | "")
-                }
-                className="min-w-0 flex-1 rounded-2xl border border-border bg-surface px-3 py-2 text-xs outline-none transition-colors focus:border-accent"
-              >
-                <option value="">Crédito e débito</option>
-                <option value="credito">Só crédito</option>
-                <option value="debito">Só débito</option>
-              </select>
-            )}
-          </div>
+        {mostraCategoria && (
+          <select
+            value={categoriaFiltro}
+            onChange={(event) => setCategoriaFiltro(event.target.value)}
+            className="rounded-2xl border border-border bg-surface px-3 py-2 text-xs outline-none transition-colors focus:border-accent"
+          >
+            <option value="">Todas as categorias</option>
+            {categories
+              .filter((c) => tipoFiltro === "todos" || c.tipo === tipoFiltro)
+              .map((c) => (
+                <option key={c.id} value={c.nome}>
+                  {c.icone ?? ""} {c.nome}
+                </option>
+              ))}
+          </select>
         )}
 
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={buscando ? `busca-${termo}` : `${monthKey}-${tipoFiltro}-${categoriaFiltro}-${formaPagamentoFiltro}`}
+            key={buscando ? `busca-${termo}` : `${monthKey}-${tipoFiltro}-${categoriaFiltro}`}
             initial={{ opacity: 0, x: 8 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -8 }}
@@ -299,7 +250,6 @@ export default function HistoricoPage() {
                         onDelete={deleteTransaction}
                         colorByCategoria={colorByCategoria}
                         iconByCategoria={iconByCategoria}
-                        bankNameById={bankNameById}
                         originDateById={originDateById}
                       />
                     ) : (

@@ -21,12 +21,10 @@ type UndoPayment = (parcela: Transaction) => Promise<void>;
 /** Seção de empréstimos do Dashboard — só aparece quando há pelo menos um. */
 export function LoansSection({
   loans,
-  bankNameById,
   onPayInstallment,
   onUndoPayment,
 }: {
   loans: LoanSummary[];
-  bankNameById: Map<string, string>;
   onPayInstallment: PayInstallment;
   onUndoPayment: UndoPayment;
 }) {
@@ -65,7 +63,6 @@ export function LoansSection({
             loan.valorTotalPagar > 0
               ? Math.min((loan.totalPago / loan.valorTotalPagar) * 100, 100)
               : 0;
-          const bancoNome = loan.bancoId ? bankNameById.get(loan.bancoId) : undefined;
           const quitado = isQuitado(loan);
           return (
             <li key={loan.id}>
@@ -83,7 +80,6 @@ export function LoansSection({
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium">{loan.descricao}</span>
                       <span className="block truncate text-xs text-ink-muted">
-                        {bancoNome ? `${bancoNome} · ` : ""}
                         {loan.parcelasPagas}/{loan.parcelasTotal} parcelas pagas
                       </span>
                     </span>
@@ -116,7 +112,6 @@ export function LoansSection({
 
       <LoanDetailSheet
         loan={selected}
-        bankNameById={bankNameById}
         onPayInstallment={onPayInstallment}
         onUndoPayment={onUndoPayment}
         onClose={() => setSelectedId(null)}
@@ -127,13 +122,11 @@ export function LoansSection({
 
 function LoanDetailSheet({
   loan,
-  bankNameById,
   onPayInstallment,
   onUndoPayment,
   onClose,
 }: {
   loan: LoanSummary | null;
-  bankNameById: Map<string, string>;
   onPayInstallment: PayInstallment;
   onUndoPayment: UndoPayment;
   onClose: () => void;
@@ -147,7 +140,6 @@ function LoanDetailSheet({
         <>
           <p className="mb-1 font-medium">{loan.descricao}</p>
           <p className="mb-4 text-xs text-ink-muted">
-            {loan.bancoId && bankNameById.get(loan.bancoId) ? `${bankNameById.get(loan.bancoId)} · ` : ""}
             {loan.dataRecebimento
               ? `recebido em ${formatDate(loan.dataRecebimento)}`
               : "recebimento não registrado (excluído ou dinheiro já usado antes do app)"}

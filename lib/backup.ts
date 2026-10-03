@@ -13,7 +13,13 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 
-/** Todas as coleções com documentos ligados a um usuário (via campo `userId`) — usado por backup, importação e exclusão de conta. */
+/**
+ * Todas as coleções com documentos ligados a um usuário (via campo `userId`)
+ * — usado por backup, importação e exclusão de conta. "banks",
+ * "bankPayments", "bankTransfers" e "patrimonioSnapshots" não são mais usadas
+ * pelo app, mas contas antigas ainda têm dados nelas: continuam aqui pra
+ * entrar no backup e, principalmente, pra serem apagadas junto ao excluir a conta.
+ */
 const USER_SCOPED_COLLECTIONS = [
   "transactions",
   "categories",

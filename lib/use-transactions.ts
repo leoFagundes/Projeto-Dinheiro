@@ -14,7 +14,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./auth-context";
-import type { FormaPagamento, NewTransaction, Transaction } from "./types";
+import type { NewTransaction, Transaction } from "./types";
 
 /**
  * Igual a Partial<NewTransaction>, exceto pelos campos opcionais que
@@ -23,10 +23,8 @@ import type { FormaPagamento, NewTransaction, Transaction } from "./types";
  * o valor antigo esquecido lá (updateDoc faz merge, não substitui).
  */
 type TransactionUpdateInput = Partial<
-  Omit<NewTransaction, "bancoId" | "formaPagamento" | "recorrenteFim" | "recorrenciaIntervalo">
+  Omit<NewTransaction, "recorrenteFim" | "recorrenciaIntervalo">
 > & {
-  bancoId?: string;
-  formaPagamento?: FormaPagamento | "";
   recorrenteFim?: string;
   recorrenciaIntervalo?: "mensal" | "anual" | "";
 };
@@ -91,7 +89,6 @@ export function useTransactions() {
         categoria: string;
         descricao: string;
         data: string;
-        bancoId?: string;
       },
       numParcelas: number,
       startFrom: number = 1,
@@ -119,7 +116,6 @@ export function useTransactions() {
             compraId,
             parcelaAtual,
             parcelaTotal: numParcelas,
-            ...(input.bancoId ? { bancoId: input.bancoId, formaPagamento: "credito" } : {}),
             criadoEm: Date.now(),
           });
         }),
@@ -130,14 +126,11 @@ export function useTransactions() {
 
   /**
    * Registra um empréstimo: o valor recebido entra como receita na data em
-   * que caiu na conta (soma no saldo em conta do banco), e o valor total a
-   * pagar é dividido em N parcelas no débito a partir da data da 1ª parcela
-   * — datas diferentes de propósito, já que o dinheiro costuma cair antes do
-   * vencimento da primeira cobrança. Cada parcela só desconta da conta no
-   * próprio dia (ver computeBankSaldoConta), então dá pra planejar deixando o
-   * dinheiro reservado antes de cada cobrança chegar. Receita e parcelas
-   * compartilham `emprestimoId`, o que permite reconstruir o empréstimo
-   * inteiro (ver computeLoans) sem precisar de uma coleção separada.
+   * que o dinheiro chegou, e o valor total a pagar é dividido em N parcelas
+   * mensais a partir da data da 1ª parcela — datas diferentes de propósito,
+   * já que o dinheiro costuma cair antes do vencimento da primeira cobrança.
+   * Receita e parcelas compartilham `emprestimoId`, o que permite reconstruir
+   * o empréstimo inteiro (ver computeLoans) sem precisar de uma coleção separada.
    */
   const addLoan = useCallback(
     async (
@@ -148,7 +141,6 @@ export function useTransactions() {
         descricao: string;
         dataRecebimento: string;
         dataPrimeiraParcela: string;
-        bancoId: string;
       },
       numParcelas: number,
     ) => {
@@ -166,7 +158,6 @@ export function useTransactions() {
         descricao: `Empréstimo recebido — ${input.descricao}`,
         data: input.dataRecebimento,
         recorrente: false,
-        bancoId: input.bancoId,
         emprestimoId,
         criadoEm: Date.now(),
       });
@@ -184,8 +175,6 @@ export function useTransactions() {
             descricao: input.descricao,
             data,
             recorrente: false,
-            bancoId: input.bancoId,
-            formaPagamento: "debito" as const,
             compraId: emprestimoId,
             parcelaAtual: index + 1,
             parcelaTotal: numParcelas,
@@ -201,12 +190,8 @@ export function useTransactions() {
   );
 
   const updateTransaction = useCallback(async (id: string, input: TransactionUpdateInput) => {
-    const { bancoId, formaPagamento, recorrenteFim, recorrenciaIntervalo, ...rest } = input;
+    const { recorrenteFim, recorrenciaIntervalo, ...rest } = input;
     const payload: Record<string, unknown> = { ...rest };
-    if (bancoId !== undefined) payload.bancoId = bancoId ? bancoId : deleteField();
-    if (formaPagamento !== undefined) {
-      payload.formaPagamento = formaPagamento ? formaPagamento : deleteField();
-    }
     if (recorrenteFim !== undefined) {
       payload.recorrenteFim = recorrenteFim ? recorrenteFim : deleteField();
     }
@@ -235,8 +220,8 @@ export function useTransactions() {
    * Registra o pagamento de uma parcela de empréstimo com o valor/data reais
    * — pode ser diferente do combinado (pagar antes costuma sair mais barato,
    * pagar depois mais caro com multa/juros). `valorOriginal`/`dataVencimento`
-   * da parcela não mudam, só `valor`/`data` (o que efetivamente sai da conta
-   * e quando), que é o que computeBankSaldoConta e o resto do app já leem.
+   * da parcela não mudam, só `valor`/`data` (o que efetivamente foi pago e
+   * quando), que é o que o resto do app já lê.
    */
   const payLoanInstallment = useCallback(
     async (parcelaId: string, valorPago: number, dataPagamento: string) => {
@@ -295,12 +280,6 @@ export function useTransactions() {
         data: `${thisMonth}-${day}`,
         recorrente: true,
         recorrenteOrigemId: template.id,
-        ...(template.bancoId
-          ? {
-              bancoId: template.bancoId,
-              ...(template.formaPagamento ? { formaPagamento: template.formaPagamento } : {}),
-            }
-          : {}),
         criadoEm: Date.now(),
       });
     }

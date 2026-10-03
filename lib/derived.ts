@@ -3,16 +3,11 @@ import {
   clampDayToMonth,
   currentMonthKey,
   currentYear,
-  formatCurrency,
   monthKeyOfIsoDate,
   todayIsoDate,
   yearOfIsoDate,
 } from "./format";
 import type {
-  Bank,
-  BankPayment,
-  BankTransfer,
-  FormaPagamento,
   Investment,
   InvestmentMovement,
   Pocket,
@@ -33,8 +28,6 @@ export type CalendarEvent = {
   origem: "transacao" | "recorrencia";
   /** Se é (ou projeta) uma recorrência — usado pra destacar assinaturas/contas fixas na agenda. */
   recorrente: boolean;
-  bancoId?: string;
-  formaPagamento?: FormaPagamento;
   parcelaAtual?: number;
   parcelaTotal?: number;
 };
@@ -55,7 +48,6 @@ export type LoanSummary = {
   id: string;
   descricao: string;
   categoria: string;
-  bancoId?: string;
   /**
    * Ausente quando a receita do valor recebido foi excluída (ex: dinheiro já
    * usado antes de começar a usar o app, sem sentido contar como entrada
@@ -84,8 +76,7 @@ export type LoanSummary = {
  * recebido (ex: dinheiro que já tinha sido usado antes do app, e por isso não
  * devia contar como entrada nova), o empréstimo continua aparecendo normal,
  * só sem o dado de "quanto/quando recebeu". Uma parcela conta como paga
- * quando sua `data` atual já passou (mesmo critério que computeBankSaldoConta
- * usa pra descontar do saldo em conta), então pagar antecipado ou atrasado —
+ * quando sua `data` atual já passou, então pagar antecipado ou atrasado —
  * com um valor diferente do combinado — já reflete aqui automaticamente.
  */
 export function computeLoans(transactions: Transaction[]): LoanSummary[] {
@@ -111,7 +102,6 @@ export function computeLoans(transactions: Transaction[]): LoanSummary[] {
         id: emprestimoId,
         descricao: parcelas[0]?.descricao ?? "Empréstimo",
         categoria: parcelas[0]?.categoria ?? "",
-        bancoId: receita?.bancoId ?? parcelas[0]?.bancoId,
         valorRecebido: receita?.valor,
         dataRecebimento: receita?.data,
         valorTotalPagar: parcelas.reduce((sum, p) => sum + (p.valorOriginal ?? p.valor), 0),
@@ -263,254 +253,6 @@ export function computeCategoryBreakdown(
 }
 
 /**
- * Despesas do mês agrupadas por forma de pagamento: crédito (fica na fatura),
- * débito (sai na hora) e sem banco vinculado (dinheiro/pix, não passa por
- * cartão nenhum). Sem banco não tem `formaPagamento` definido.
- */
-export function computeFormaPagamentoBreakdown(
-  transactions: Transaction[],
-  monthKey: string,
-): { credito: number; debito: number; semBanco: number } {
-  let credito = 0;
-  let debito = 0;
-  let semBanco = 0;
-  for (const t of transactions) {
-    if (t.tipo !== "despesa" || monthKeyOfIsoDate(t.data) !== monthKey) continue;
-    if (!t.bancoId) semBanco += t.valor;
-    else if (t.formaPagamento === "debito") debito += t.valor;
-    else credito += t.valor;
-  }
-  return { credito, debito, semBanco };
-}
-
-/**
- * Mês (yyyy-MM) da fatura em que uma compra cai, considerando o dia de
- * fechamento do banco: depois do fechamento, a compra vira fatura do mês
- * seguinte. Sem `diaFechamento` definido, cai no mês corrido da compra
- * (comportamento antigo, mantido pra banco que não configurou isso ainda).
- */
-export function computeFaturaMonthKey(dataIso: string, diaFechamento: number | undefined): string {
-  const monthKey = monthKeyOfIsoDate(dataIso);
-  if (!diaFechamento) return monthKey;
-  const dia = Number(dataIso.slice(8, 10));
-  return dia > diaFechamento ? addMonthsToKey(monthKey, 1) : monthKey;
-}
-
-/**
- * Se uma despesa entra na fatura de um banco num mês: precisa ser no
- * crédito, cair no mês certo (considerando o dia de fechamento — ver
- * computeFaturaMonthKey) e, se `monthKey` for o mês atual, já ter
- * "acontecido" de verdade (data <= hoje) — uma assinatura gerada no dia 1
- * mas que só cobra no dia 20 não conta antes do dia 20 chegar. Meses
- * passados (histórico) e futuros (prévia) não têm esse corte.
- */
-function isTransactionInFatura(
-  t: Transaction,
-  bank: Bank | undefined,
-  monthKey: string,
-  isMesAtual: boolean,
-  hoje: string,
-): boolean {
-  if (t.tipo !== "despesa" || !t.bancoId || t.formaPagamento === "debito") return false;
-  if (isMesAtual && t.data > hoje) return false;
-  return computeFaturaMonthKey(t.data, bank?.diaFechamento) === monthKey;
-}
-
-/**
- * Total de despesas no crédito vinculadas a cada banco na fatura do mês.
- * Débito é pagamento imediato e não entra na fatura.
- */
-export function computeBankBreakdown(
-  transactions: Transaction[],
-  monthKey: string,
-  banks: Bank[],
-): { bancoId: string; nome: string; total: number }[] {
-  const bankById = new Map(banks.map((b) => [b.id, b]));
-  const isMesAtual = monthKey === currentMonthKey();
-  const hoje = todayIsoDate();
-  const totals = new Map<string, number>();
-  for (const t of transactions) {
-    if (!t.bancoId || !isTransactionInFatura(t, bankById.get(t.bancoId), monthKey, isMesAtual, hoje)) {
-      continue;
-    }
-    totals.set(t.bancoId, (totals.get(t.bancoId) ?? 0) + t.valor);
-  }
-  const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
-  return Array.from(totals, ([bancoId, total]) => ({
-    bancoId,
-    nome: bankNameById.get(bancoId) ?? "Banco removido",
-    total,
-  })).sort((a, b) => b.total - a.total);
-}
-
-/**
- * As transações que compõem a fatura de UM banco num mês — os itens de
- * verdade por trás do total de computeBankBreakdown, pra mostrar/editar um
- * por um (ex: num modal de detalhe da fatura).
- */
-export function computeBankFaturaTransactions(
-  transactions: Transaction[],
-  bancoId: string,
-  monthKey: string,
-  banks: Bank[],
-): Transaction[] {
-  const bank = banks.find((b) => b.id === bancoId);
-  const isMesAtual = monthKey === currentMonthKey();
-  const hoje = todayIsoDate();
-  return transactions
-    .filter((t) => t.bancoId === bancoId && isTransactionInFatura(t, bank, monthKey, isMesAtual, hoje))
-    .sort((a, b) => (a.data < b.data ? 1 : a.data > b.data ? -1 : 0));
-}
-
-/**
- * Fatura "ajustada" de um banco no mês: o que foi calculado a partir das
- * despesas no crédito, menos o que já foi pago (ou corrigido manualmente)
- * pra esse mês. Pagar a fatura ou editar o ajuste manual em Configurações
- * mexem aqui — sem isso, o valor exibido nunca refletia um pagamento feito.
- */
-export function computeBankFaturaAjustada(
-  bancoId: string,
-  transactions: Transaction[],
-  monthKey: string,
-  banks: Bank[],
-  payments: BankPayment[],
-): number {
-  const raw =
-    computeBankBreakdown(transactions, monthKey, banks).find((item) => item.bancoId === bancoId)
-      ?.total ?? 0;
-  const aplicado = payments
-    .filter((p) => p.bancoId === bancoId && monthKeyOfIsoDate(p.data) === monthKey)
-    .reduce((sum, p) => sum + (p.aplicadoFatura ?? 0), 0);
-  return Math.max(0, raw - aplicado);
-}
-
-/**
- * Saldo em conta de um banco: base ajustada manualmente + receitas recebidas
- * nele + retiradas de caixinhas/resgates de investimento de volta pra conta +
- * transferências recebidas de outro banco, menos despesas no débito (saem da
- * conta na hora), depósitos em caixinhas, aportes em investimentos, pagamentos
- * de fatura e transferências enviadas a outro banco.
- * Despesas no crédito não entram aqui — elas compõem a fatura, cobrada depois.
- * Receita/despesa no débito com data futura ainda não "aconteceu" — uma
- * assinatura no débito gerada logo no início do mês (mas que só cobra no dia
- * 20, por exemplo) não pode tirar o dinheiro da conta antes do dia chegar.
- */
-export function computeBankSaldoConta(
-  bank: Bank,
-  transactions: Transaction[],
-  movements: PocketMovement[],
-  payments: BankPayment[] = [],
-  investmentMovements: InvestmentMovement[] = [],
-  transfers: BankTransfer[] = [],
-): number {
-  const hoje = todayIsoDate();
-  let saldo = bank.saldoContaInicial ?? 0;
-  for (const t of transactions) {
-    if (t.bancoId !== bank.id) continue;
-    if (t.data > hoje) continue;
-    if (t.tipo === "receita") saldo += t.valor;
-    else if (t.formaPagamento === "debito") saldo -= t.valor;
-  }
-  for (const m of movements) {
-    if (m.bancoId !== bank.id) continue;
-    saldo += m.tipo === "retirada" ? m.valor : -m.valor;
-  }
-  for (const p of payments) {
-    if (p.bancoId !== bank.id) continue;
-    saldo -= p.valor;
-  }
-  for (const m of investmentMovements) {
-    if (m.bancoId !== bank.id) continue;
-    saldo += m.tipo === "resgate" ? m.valor : -m.valor;
-  }
-  for (const tr of transfers) {
-    if (tr.fromBancoId === bank.id) saldo -= tr.valor;
-    if (tr.toBancoId === bank.id) saldo += tr.valor;
-  }
-  return saldo;
-}
-
-/**
- * Saldo em conta de um banco no fim de um mês específico (não hoje) — usado
- * no relatório CSV pra não misturar o saldo atual com a fatura de um mês
- * antigo, o que faria parecer que aquele era o saldo de época.
- */
-export function computeBankSaldoContaAsOf(
-  bank: Bank,
-  asOfMonthKey: string,
-  transactions: Transaction[],
-  movements: PocketMovement[],
-  payments: BankPayment[] = [],
-  investmentMovements: InvestmentMovement[] = [],
-  transfers: BankTransfer[] = [],
-): number {
-  const upTo = (data: string) => monthKeyOfIsoDate(data) <= asOfMonthKey;
-  return computeBankSaldoConta(
-    bank,
-    transactions.filter((t) => upTo(t.data)),
-    movements.filter((m) => upTo(m.data)),
-    payments.filter((p) => upTo(p.data)),
-    investmentMovements.filter((m) => upTo(m.data)),
-    transfers.filter((tr) => upTo(tr.data)),
-  );
-}
-
-/**
- * Patrimônio líquido "de verdade": o que está em conta nos bancos + guardado
- * em caixinhas + aportado em investimentos (custo, não cotação de mercado),
- * menos as dívidas de cartão (saldo anterior + fatura do mês corrente).
- */
-export function computePatrimonio(
-  banks: Bank[],
-  pockets: Pocket[],
-  investments: Investment[],
-  transactions: Transaction[],
-  pocketMovements: PocketMovement[],
-  bankPayments: BankPayment[],
-  investmentMovements: InvestmentMovement[],
-  bankTransfers: BankTransfer[] = [],
-): {
-  contas: number;
-  caixinhas: number;
-  investimentos: number;
-  dividas: number;
-  saldoLivre: number;
-  total: number;
-} {
-  const contas = banks.reduce(
-    (sum, b) =>
-      sum +
-      computeBankSaldoConta(
-        b,
-        transactions,
-        pocketMovements,
-        bankPayments,
-        investmentMovements,
-        bankTransfers,
-      ),
-    0,
-  );
-  const caixinhas = pockets.reduce((sum, p) => sum + p.saldo, 0);
-  const investimentos = investments.reduce((sum, i) => sum + (i.saldoAtual ?? i.valorInvestido), 0);
-  const thisMonth = currentMonthKey();
-  const faturaMes = banks.reduce(
-    (sum, b) => sum + computeBankFaturaAjustada(b.id, transactions, thisMonth, banks, bankPayments),
-    0,
-  );
-  const saldoAnteriorTotal = banks.reduce((sum, b) => sum + b.saldoDevedor, 0);
-  const dividas = faturaMes + saldoAnteriorTotal;
-  return {
-    contas,
-    caixinhas,
-    investimentos,
-    dividas,
-    /** Dinheiro em conta já descontando o que está comprometido nas faturas — o que sobra de verdade. */
-    saldoLivre: contas - dividas,
-    total: contas + caixinhas + investimentos - dividas,
-  };
-}
-
-/**
  * Quanto uma caixinha já rendeu: soma dos movimentos "rendimento" (pode ser
  * negativo). O total aportado (sem contar o rendimento) é `saldo - rendimento`.
  */
@@ -543,8 +285,6 @@ export function computeMonthEvents(
         categoria: t.categoria,
         origem: "transacao",
         recorrente: t.recorrente,
-        bancoId: t.bancoId,
-        formaPagamento: t.formaPagamento,
         parcelaAtual: t.parcelaAtual,
         parcelaTotal: t.parcelaTotal,
       });
@@ -576,8 +316,6 @@ export function computeMonthEvents(
       categoria: template.categoria,
       origem: "recorrencia",
       recorrente: true,
-      bancoId: template.bancoId,
-      formaPagamento: template.formaPagamento,
     });
   }
 
@@ -616,8 +354,8 @@ export type UpcomingReminder = {
 
 /**
  * Cobranças de assinatura e parcelas de empréstimo ainda não pagas que caem
- * nos próximos `days` dias — usado pro aviso de "fatura/assinatura perto do
- * vencimento" (ver Ajustes → Notificações).
+ * nos próximos `days` dias — usado pro aviso de "conta perto do vencimento"
+ * (ver Ajustes → Notificações).
  */
 export function computeUpcomingReminders(transactions: Transaction[], days = 3): UpcomingReminder[] {
   const start = todayIsoDate();
@@ -655,24 +393,53 @@ export function computeUpcomingReminders(transactions: Transaction[], days = 3):
 }
 
 /**
- * Projeta o saldo (receitas - despesas) do mês até o fim: soma o que já está
- * lançado (inclusive parcelas/recorrências futuras já geradas nesse mês) com
- * o que ainda falta gerar de recorrências que só existem como projeção.
+ * Receitas/despesas do mês divididas em "já aconteceu" (data até hoje) e
+ * "ainda vai acontecer" (data depois de hoje, incluindo cobranças de
+ * assinatura que só existem como projeção) — o total do mês sozinho misturava
+ * o que já saiu com o que ainda vai vencer. A comparação com o mês anterior
+ * usa o MESMO PERÍODO (dia 1 até o dia de hoje), senão no começo do mês o
+ * gasto parcial sempre parecia uma queda enorme frente ao mês passado inteiro.
  */
-export function computeProjectedMonthBalance(transactions: Transaction[], monthKey: string): number {
-  const { saldoMes } = computeMonthTotals(transactions, monthKey);
-  const projetado = computeMonthEvents(transactions, monthKey)
-    .filter((e) => e.origem === "recorrencia")
-    .reduce((sum, e) => sum + (e.tipo === "receita" ? e.valor : -e.valor), 0);
-  return saldoMes + projetado;
+export function computeMonthProgress(transactions: Transaction[], monthKey: string) {
+  const hoje = todayIsoDate();
+  let receitasAteHoje = 0;
+  let despesasAteHoje = 0;
+  let receitasAReceber = 0;
+  let despesasAPagar = 0;
+  for (const event of computeMonthEvents(transactions, monthKey)) {
+    const jaAconteceu = event.data <= hoje;
+    if (event.tipo === "receita") {
+      if (jaAconteceu) receitasAteHoje += event.valor;
+      else receitasAReceber += event.valor;
+    } else if (jaAconteceu) {
+      despesasAteHoje += event.valor;
+    } else {
+      despesasAPagar += event.valor;
+    }
+  }
+
+  const mesAnterior = addMonthsToKey(monthKey, -1);
+  const diaLimite = clampDayToMonth(mesAnterior, Number(hoje.slice(8, 10)));
+  const limiteMesAnterior = `${mesAnterior}-${diaLimite}`;
+  const despesasMesAnteriorMesmoPeriodo = transactions
+    .filter(
+      (t) =>
+        t.tipo === "despesa" &&
+        monthKeyOfIsoDate(t.data) === mesAnterior &&
+        t.data <= limiteMesAnterior,
+    )
+    .reduce((sum, t) => sum + t.valor, 0);
+
+  return {
+    receitasAteHoje,
+    despesasAteHoje,
+    receitasAReceber,
+    despesasAPagar,
+    despesasMesAnteriorMesmoPeriodo,
+  };
 }
 
-/**
- * Receitas x despesas mês a mês (não é um saldo acumulado — cada mês é
- * independente). Usado pra ver tendência sem inventar um "saldo" que não bate
- * com o Patrimônio, já que este último depende do estado atual de bancos,
- * caixinhas e investimentos, não só do histórico de transações.
- */
+/** Receitas x despesas mês a mês (não é um saldo acumulado — cada mês é independente). */
 export function computeMonthlyFlowTrend(
   transactions: Transaction[],
   months = 6,
@@ -737,9 +504,8 @@ export function computeYearlyContributions(
 
 /**
  * Evolução acumulada do total aportado (aporte - resgate, mês a mês) desde o
- * primeiro movimento até o mês atual. Diferente do Patrimônio, dá pra
- * reconstruir isso retroativo — contribuição tem data exata e não depende de
- * retrato nenhum, só do histórico que já existe.
+ * primeiro movimento até o mês atual — reconstruída retroativamente, já que
+ * cada contribuição tem data exata.
  */
 export function computeCumulativeContributions(
   movements: InvestmentMovement[],
@@ -805,18 +571,15 @@ export function computeInvestmentYearLedger(
 export type HistoryEntryTipo =
   | "receita"
   | "despesa"
-  | "transferencia"
   | "transferencia_caixinha"
-  | "pagamento_fatura"
-  | "ajuste_fatura"
   | "caixinha"
   | "investimento";
 
 /**
  * Item unificado do Histórico: junta transações com todas as outras
- * movimentações que hoje ficam em coleções separadas (transferência entre
- * bancos, pagamento/ajuste de fatura, caixinha, investimento) — sem isso,
- * essas ações nunca apareciam em lugar nenhum pro usuário revisar.
+ * movimentações que hoje ficam em coleções separadas (caixinha,
+ * investimento) — sem isso, essas ações nunca apareciam em lugar nenhum pro
+ * usuário revisar.
  */
 export type HistoryEntry = {
   id: string;
@@ -829,7 +592,6 @@ export type HistoryEntry = {
   /** Direção pra exibição: soma ou subtrai visualmente (não é sinal contábil). */
   direcao: "positivo" | "negativo" | "neutro";
   categoria?: string;
-  formaPagamento?: FormaPagamento;
   /** Presente só quando `tipo` é "receita"/"despesa" — permite editar/excluir. */
   transaction?: Transaction;
   /**
@@ -881,7 +643,6 @@ export function computeProjectedSubscriptionEntries(
       valor: template.valor,
       direcao: template.tipo === "receita" ? "positivo" : "negativo",
       categoria: template.categoria,
-      formaPagamento: template.formaPagamento,
     });
   }
 
@@ -890,38 +651,27 @@ export function computeProjectedSubscriptionEntries(
 
 export function computeUnifiedHistory(params: {
   transactions: Transaction[];
-  banks: Bank[];
   pockets: Pocket[];
   investments: Investment[];
-  bankTransfers: BankTransfer[];
-  bankPayments: BankPayment[];
   pocketMovements: PocketMovement[];
   investmentMovements: InvestmentMovement[];
   pocketTransfers?: PocketTransfer[];
-  onDeleteBankTransfer?: (transfer: BankTransfer) => Promise<void>;
-  onDeleteBankPayment?: (payment: BankPayment) => Promise<void>;
   onDeletePocketMovement?: (movement: PocketMovement) => Promise<void>;
   onDeleteInvestmentMovement?: (movement: InvestmentMovement) => Promise<void>;
   onDeletePocketTransfer?: (transfer: PocketTransfer) => Promise<void>;
 }): HistoryEntry[] {
   const {
     transactions,
-    banks,
     pockets,
     investments,
-    bankTransfers,
-    bankPayments,
     pocketMovements,
     investmentMovements,
     pocketTransfers = [],
-    onDeleteBankTransfer,
-    onDeleteBankPayment,
     onDeletePocketMovement,
     onDeleteInvestmentMovement,
     onDeletePocketTransfer,
   } = params;
 
-  const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
   const pocketNameById = new Map(pockets.map((p) => [p.id, p.nome]));
   const investmentNameById = new Map(investments.map((i) => [i.id, i.nome]));
 
@@ -934,27 +684,10 @@ export function computeUnifiedHistory(params: {
       criadoEm: t.criadoEm,
       tipo: t.tipo,
       titulo: t.descricao,
-      detalhe: t.bancoId ? bankNameById.get(t.bancoId) : undefined,
       valor: t.valor,
       direcao: t.tipo === "receita" ? "positivo" : "negativo",
       categoria: t.categoria,
-      formaPagamento: t.formaPagamento,
       transaction: t,
-    });
-  }
-
-  for (const tr of bankTransfers) {
-    const de = bankNameById.get(tr.fromBancoId) ?? "banco removido";
-    const para = bankNameById.get(tr.toBancoId) ?? "banco removido";
-    entries.push({
-      id: `bt-${tr.id}`,
-      data: tr.data,
-      criadoEm: tr.criadoEm,
-      tipo: "transferencia",
-      titulo: `Transferência: ${de} → ${para}`,
-      valor: tr.valor,
-      direcao: "neutro",
-      onDelete: onDeleteBankTransfer ? () => onDeleteBankTransfer(tr) : undefined,
     });
   }
 
@@ -973,27 +706,8 @@ export function computeUnifiedHistory(params: {
     });
   }
 
-  for (const p of bankPayments) {
-    const banco = bankNameById.get(p.bancoId) ?? "banco removido";
-    const ehAjuste = p.tipo === "ajuste";
-    entries.push({
-      id: `bp-${p.id}`,
-      data: p.data,
-      criadoEm: p.criadoEm,
-      tipo: ehAjuste ? "ajuste_fatura" : "pagamento_fatura",
-      titulo: ehAjuste ? `Ajuste de fatura — ${banco}` : `Pagamento de fatura — ${banco}`,
-      detalhe: ehAjuste
-        ? `${(p.aplicadoFatura ?? 0) >= 0 ? "reduziu" : "aumentou"} a fatura em ${formatCurrency(Math.abs(p.aplicadoFatura ?? 0))}`
-        : undefined,
-      valor: ehAjuste ? Math.abs(p.aplicadoFatura ?? 0) : p.valor,
-      direcao: "negativo",
-      onDelete: onDeleteBankPayment ? () => onDeleteBankPayment(p) : undefined,
-    });
-  }
-
   for (const m of pocketMovements) {
     const caixinha = pocketNameById.get(m.pocketId) ?? "caixinha removida";
-    const bancoDetalhe = m.bancoId ? bankNameById.get(m.bancoId) : undefined;
     entries.push({
       id: `pm-${m.id}`,
       data: m.data,
@@ -1005,7 +719,6 @@ export function computeUnifiedHistory(params: {
           : m.tipo === "retirada"
             ? `Caixinha ${caixinha} — retirada`
             : `Caixinha ${caixinha} — rendimento`,
-      detalhe: bancoDetalhe,
       valor: Math.abs(m.valor),
       direcao:
         m.tipo === "retirada" || (m.tipo === "rendimento" && m.valor < 0) ? "positivo" : "negativo",
@@ -1015,7 +728,6 @@ export function computeUnifiedHistory(params: {
 
   for (const m of investmentMovements) {
     const investimento = investmentNameById.get(m.investimentoId) ?? "investimento removido";
-    const bancoDetalhe = m.bancoId ? bankNameById.get(m.bancoId) : undefined;
     entries.push({
       id: `im-${m.id}`,
       data: m.data,
@@ -1027,7 +739,7 @@ export function computeUnifiedHistory(params: {
           : m.tipo === "resgate"
             ? `Investimento ${investimento} — resgate`
             : `Investimento ${investimento} — rendimento`,
-      detalhe: [bancoDetalhe, m.cotas ? `${m.cotas} cotas` : null].filter(Boolean).join(" · ") || undefined,
+      detalhe: m.cotas ? `${m.cotas} cotas` : undefined,
       valor: Math.abs(m.valor),
       direcao:
         m.tipo === "resgate" || (m.tipo === "rendimento" && m.valor < 0) ? "positivo" : "negativo",

@@ -7,7 +7,6 @@ import { ptBR } from "react-day-picker/locale";
 import { CalendarClock, Repeat } from "lucide-react";
 import { useTransactions } from "@/lib/use-transactions";
 import { useCategories } from "@/lib/use-categories";
-import { useBanks } from "@/lib/use-banks";
 import { assignCategoryColors, categoryKey, mapCategoryIcons } from "@/lib/categories";
 import { FALLBACK_CATEGORY_COLOR, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { computeMonthEvents, type CalendarEvent } from "@/lib/derived";
@@ -21,7 +20,6 @@ import { Skeleton } from "@/app/_components/Skeleton";
 export default function CalendarioPage() {
   const { transactions, loading } = useTransactions();
   const { categories } = useCategories();
-  const { banks } = useBanks();
   const [month, setMonth] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState<Date | undefined>();
 
@@ -40,7 +38,6 @@ export default function CalendarioPage() {
   const events = computeMonthEvents(transactions, monthKey);
   const colorByCategoria = assignCategoryColors(categories);
   const iconByCategoria = mapCategoryIcons(categories);
-  const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
 
   const eventsByDate = new Map<string, { receita: boolean; despesa: boolean }>();
   for (const event of events) {
@@ -180,7 +177,6 @@ export default function CalendarioPage() {
                     event={event}
                     colorByCategoria={colorByCategoria}
                     iconByCategoria={iconByCategoria}
-                    bankNameById={bankNameById}
                   />
                 ))}
               </ul>
@@ -196,18 +192,15 @@ function EventRow({
   event,
   colorByCategoria,
   iconByCategoria,
-  bankNameById,
 }: {
   event: CalendarEvent;
   colorByCategoria: Map<string, string>;
   iconByCategoria: Map<string, string>;
-  bankNameById: Map<string, string>;
 }) {
   const signedValue = event.tipo === "receita" ? event.valor : -event.valor;
   const categoriaKey = categoryKey(event.tipo, event.categoria);
   const categoriaColor = colorByCategoria.get(categoriaKey) ?? FALLBACK_CATEGORY_COLOR;
   const categoriaIcon = iconByCategoria.get(categoriaKey) ?? FALLBACK_CATEGORY_ICON;
-  const bancoNome = event.bancoId ? bankNameById.get(event.bancoId) : undefined;
   return (
     <li className="flex items-center justify-between gap-3 rounded-xl bg-bg px-3 py-2.5 text-sm">
       <span className="flex min-w-0 items-center gap-2.5">
@@ -224,16 +217,10 @@ function EventRow({
             )}
             <span className="truncate">{event.descricao}</span>
           </span>
-          <span className="flex flex-wrap items-center gap-1 text-xs text-ink-muted">
+          <span className="block text-xs text-ink-muted">
             {event.categoria}
             {event.origem === "recorrencia" ? " · previsto" : ""}
             {event.parcelaTotal ? ` · parcela ${event.parcelaAtual}/${event.parcelaTotal}` : ""}
-            {bancoNome && (
-              <span className="rounded-full bg-surface px-1.5 py-0.5 text-[11px]">
-                {bancoNome}
-                {event.formaPagamento === "debito" ? " · débito" : ""}
-              </span>
-            )}
           </span>
         </span>
       </span>

@@ -25,7 +25,7 @@ const TABS: HelpTab[] = [
       {
         titulo: "Menu e sidebar",
         texto:
-          "No celular, toque no ícone de menu (☰) no topo pra abrir a navegação lateral. Em telas largas, ela já fica fixa na esquerda. As abas são: Dashboard, Histórico, Investir, Caixinhas, Agenda, Bancos, Assinaturas e Ajustes. Tocar na logo/nome do app sempre leva pro Dashboard.",
+          "No celular, toque no ícone de menu (☰) no topo pra abrir a navegação lateral. Em telas largas, ela já fica fixa na esquerda. As abas são: Dashboard, Histórico, Investir, Caixinhas, Agenda, Assinaturas e Ajustes. Tocar na logo/nome do app sempre leva pro Dashboard.",
       },
       {
         titulo: "Tema claro e escuro",
@@ -46,17 +46,17 @@ const TABS: HelpTab[] = [
       {
         titulo: "O painel principal",
         texto:
-          'O Patrimônio é tudo que você tem (contas + caixinhas + investimentos) menos o que você deve (fatura + saldo anterior). "Livres depois de pagar as faturas" é só o dinheiro em conta descontando as faturas — o que sobra de verdade pra gastar. "Saldo projetado do mês" soma o que já entrou/saiu com o que ainda está previsto até o fim do mês.',
+          'No topo, "Recebido no mês" e "Gasto no mês" mostram o que já entrou e saiu até hoje. Logo abaixo de cada um aparece o que ainda vai cair ou vencer até o fim do mês ("a receber"/"a pagar"). A setinha compara o gasto com o mesmo período do mês passado.',
       },
       {
-        titulo: "Atividade, bancos e empréstimos",
+        titulo: "Atividade e empréstimos",
         texto:
-          '"Próximos 7 dias" e "Últimas transações" dividem o mesmo espaço em abas — toque pra trocar. Logo abaixo, um resumo dos seus bancos. Se você tiver algum empréstimo ativo, uma seção "Empréstimos" aparece automaticamente entre Bancos e Análises.',
+          '"Próximos 7 dias" e "Últimas transações" dividem o mesmo espaço em abas — toque pra trocar. Se você tiver algum empréstimo ativo, uma seção "Empréstimos" aparece logo abaixo.',
       },
       {
         titulo: "Análises e limites por categoria",
         texto:
-          "Mais embaixo ficam os gráficos de evolução do patrimônio e de gastos por categoria, e a seção de limites mensais por categoria (definidos em Ajustes → Categorias, junto com uma meta), mostrando quanto já foi usado de cada um.",
+          "Mais embaixo ficam os gráficos de gastos por categoria e de receitas x despesas mês a mês, e a seção de limites mensais por categoria (definidos em Ajustes → Categorias, junto com uma meta), mostrando quanto já foi usado de cada um.",
       },
     ],
   },
@@ -67,12 +67,17 @@ const TABS: HelpTab[] = [
       {
         titulo: "Criando uma transação",
         texto:
-          'Toque no botão + (flutuante, no canto da tela) pra lançar uma despesa ou receita. Vincular um banco e marcar crédito faz o valor entrar na fatura (cobrado depois); débito tira na hora do saldo em conta. Marcar "Repetir" transforma essa transação numa assinatura, mensal ou anual.',
+          'Toque no botão + (flutuante, no canto da tela) pra lançar uma despesa ou receita e escolha a categoria tocando nela. Não achou a categoria? Toque em "+ Nova" pra criar uma ali mesmo — ela já fica selecionada. Marcar "Repetir" transforma essa transação numa assinatura, mensal ou anual.',
+      },
+      {
+        titulo: "Rascunho automático",
+        texto:
+          'Se você fechar o formulário no meio (ou até fechar o app), o que já estava preenchido continua lá quando você abrir de novo. Pra começar do zero, toque em "Limpar" no topo do formulário. Salvar a transação apaga o rascunho.',
       },
       {
         titulo: "Parcelando uma compra",
         texto:
-          'Compras no crédito vinculadas a um banco podem ser parceladas — o app já lança todas as parcelas nos meses seguintes. Se a compra já estava em andamento (ex: você já pagou 3 das 10 parcelas em outro controle), use "a partir da parcela" pra começar do número certo.',
+          'Qualquer despesa nova pode ser parcelada — o app já lança todas as parcelas nos meses seguintes. Se a compra já estava em andamento (ex: você já pagou 3 das 10 parcelas em outro controle), use "a partir da parcela" pra começar do número certo.',
       },
       {
         titulo: "Excluindo uma transação",
@@ -98,29 +103,13 @@ const TABS: HelpTab[] = [
     ],
   },
   {
-    id: "bancos",
-    label: "Bancos",
-    sections: [
-      {
-        titulo: "Bancos no Dashboard e na aba Bancos",
-        texto:
-          "Cada banco mostra o saldo em conta (o que tem disponível) e a fatura do mês (o que já foi gasto no crédito e ainda não foi pago). Use as setinhas pra ver a fatura de meses passados ou futuros — útil pra conferir compras parceladas que ainda vão chegar. Toque no valor da fatura pra abrir todos os itens dela num modal — dá pra editar ou excluir qualquer um ali mesmo, sem sair da tela.",
-      },
-      {
-        titulo: "Corrigindo saldo e fatura na mão",
-        texto:
-          'Se o app não bateu com a realidade, edite o banco na aba Bancos e digite o valor que está certo HOJE nesses três campos. O app calcula a diferença sozinho e ajusta por trás — nunca duplica nem apaga nada do que já foi rastreado. O campo "Dia de fechamento da fatura" (opcional) faz compras no crédito feitas depois desse dia caírem automaticamente na fatura do mês seguinte, em vez do mês corrente — inclusive pra compras já lançadas antes de configurar.',
-      },
-    ],
-  },
-  {
     id: "emprestimos",
     label: "Empréstimos",
     sections: [
       {
         titulo: "Registrando um empréstimo",
         texto:
-          'Ao criar uma transação, a aba "Empréstimo" (ao lado de Despesa/Receita) pede o valor que você vai receber, a data em que ele cai na conta, o valor total a pagar (com juros, se houver), em quantas vezes e a data da 1ª parcela. O app lança a receita do valor recebido e todas as parcelas de uma vez — sempre no débito, pra cada uma só sair da conta no dia dela.',
+          'Ao criar uma transação, a aba "Empréstimo" (ao lado de Despesa/Receita) pede o valor que você vai receber, a data em que recebeu, o valor total a pagar (com juros, se houver), em quantas vezes e a data da 1ª parcela. O app lança a receita do valor recebido e todas as parcelas mensais de uma vez.',
       },
       {
         titulo: "Acompanhando e pagando parcelas",
@@ -136,7 +125,7 @@ const TABS: HelpTab[] = [
       {
         titulo: "Guardando e rendendo",
         texto:
-          "Toque numa caixinha pra Adicionar ou Retirar (pode vincular a um banco, pra sair/voltar do saldo em conta) ou registrar Rendimento. Rendimento não é um novo depósito — é você informando o saldo real de hoje (depois de render juros), e o app calcula a diferença. O total guardado em todas as caixinhas aparece resumido no topo da aba.",
+          "Toque numa caixinha pra Adicionar, Retirar ou registrar Rendimento — tudo fica no histórico dela. Rendimento não é um novo depósito — é você informando o saldo real de hoje (depois de render juros), e o app calcula a diferença. O total guardado em todas as caixinhas aparece resumido no topo da aba.",
       },
     ],
   },
@@ -163,7 +152,7 @@ const TABS: HelpTab[] = [
       {
         titulo: "Filtrando e buscando",
         texto:
-          "Use os chips pra filtrar por tipo (receita, despesa, transferência, fatura...) e os seletores de categoria/forma de pagamento pra refinar ainda mais. A busca ignora o mês selecionado e procura em tudo.",
+          "Use os chips pra filtrar por tipo (receita, despesa, caixinha, investimento...) e o seletor de categoria pra refinar ainda mais. A busca ignora o mês selecionado e procura em tudo.",
       },
       {
         titulo: "Agenda",
@@ -184,12 +173,12 @@ const TABS: HelpTab[] = [
       {
         titulo: "Notificações e instalar o app",
         texto:
-          "Ative os avisos de fatura/assinatura próxima do vencimento (pede permissão de notificação do navegador). Se seu navegador suportar, também dá pra instalar o app na tela inicial do aparelho — funciona offline como um app nativo.",
+          "Ative os avisos de assinatura/parcela próxima do vencimento (pede permissão de notificação do navegador). Se seu navegador suportar, também dá pra instalar o app na tela inicial do aparelho — funciona offline como um app nativo.",
       },
       {
         titulo: "Backup, exportar e importar",
         texto:
-          "Baixe um backup completo dos seus dados (transações, bancos, caixinhas, investimentos e mais) a qualquer momento em Ajustes → Dados. O mesmo arquivo pode ser importado depois — a importação sempre adiciona dados novos, nunca substitui ou deduplica, então evite importar o mesmo arquivo duas vezes.",
+          "Baixe um backup completo dos seus dados (transações, caixinhas, investimentos e mais) a qualquer momento em Ajustes → Dados. O mesmo arquivo pode ser importado depois — a importação sempre adiciona dados novos, nunca substitui ou deduplica, então evite importar o mesmo arquivo duas vezes.",
       },
       {
         titulo: "Segurança: senha, PIN e biometria",

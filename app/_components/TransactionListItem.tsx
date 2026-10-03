@@ -18,14 +18,12 @@ export function TransactionListItem({
   onDelete,
   colorByCategoria,
   iconByCategoria,
-  bankNameById,
   originDateById,
 }: {
   transaction: Transaction;
   onDelete: (id: string) => Promise<void>;
   colorByCategoria: Map<string, string>;
   iconByCategoria: Map<string, string>;
-  bankNameById: Map<string, string>;
   /**
    * Data (yyyy-MM-dd) do template original, indexada pelo id do template —
    * só usada quando essa transação é uma instância gerada dele
@@ -44,7 +42,6 @@ export function TransactionListItem({
   const categoriaKey = categoryKey(transaction.tipo, transaction.categoria);
   const categoriaColor = colorByCategoria.get(categoriaKey) ?? FALLBACK_CATEGORY_COLOR;
   const categoriaIcon = iconByCategoria.get(categoriaKey) ?? FALLBACK_CATEGORY_ICON;
-  const bancoNome = transaction.bancoId ? bankNameById.get(transaction.bancoId) : undefined;
   const isRecorrenteOriginal = transaction.recorrente && !transaction.recorrenteOrigemId;
   const origemData = transaction.recorrenteOrigemId
     ? originDateById?.get(transaction.recorrenteOrigemId)
@@ -127,7 +124,7 @@ export function TransactionListItem({
                 </span>
                 <span className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{transaction.descricao}</p>
-                  <p className="flex flex-wrap items-center gap-1 text-xs text-ink-muted">
+                  <p className="text-xs text-ink-muted">
                     {transaction.categoria} · {formatDate(transaction.data)}
                     {isRecorrenteOriginal ? " · assinatura (original)" : ""}
                     {transaction.recorrenteOrigemId
@@ -137,12 +134,6 @@ export function TransactionListItem({
                       ? ` · parcela ${transaction.parcelaAtual}/${transaction.parcelaTotal}`
                       : ""}
                     {transaction.emprestimoId ? " · empréstimo" : ""}
-                    {bancoNome && (
-                      <span className="rounded-full bg-bg px-1.5 py-0.5 text-[11px]">
-                        {bancoNome}
-                        {transaction.formaPagamento === "debito" ? " · débito" : ""}
-                      </span>
-                    )}
                   </p>
                 </span>
                 <Pencil size={13} className="shrink-0 text-ink-muted/50" />

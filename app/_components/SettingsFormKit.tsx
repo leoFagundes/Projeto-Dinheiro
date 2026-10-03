@@ -3,7 +3,7 @@
 import { motion } from "motion/react";
 import { Eye, EyeOff, Pencil, Plus, Trash2 } from "lucide-react";
 
-/** Classes reaproveitadas pelos formulários de adicionar/editar entidades (banco, caixinha, investimento, categoria...) em todo o app. */
+/** Classes reaproveitadas pelos formulários de adicionar/editar entidades (caixinha, investimento, categoria...) em todo o app. */
 export const INPUT_CLASS =
   "rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent";
 export const INPUT_CLASS_COMPACT =
@@ -11,7 +11,7 @@ export const INPUT_CLASS_COMPACT =
 export const SAVE_BUTTON_CLASS =
   "rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition-transform active:scale-[0.98] hover:bg-accent-strong disabled:opacity-60";
 
-/** Botão de "+" que gira e vira "×" quando o formulário associado está aberto — usado no cabeçalho de Bancos, Caixinhas e Investimentos. */
+/** Botão de "+" que gira e vira "×" quando o formulário associado está aberto — usado no cabeçalho de Caixinhas e Investimentos. */
 export function ToggleAddButton({
   open,
   onClick,

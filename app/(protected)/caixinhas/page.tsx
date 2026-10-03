@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { PiggyBank, Trash2 } from "lucide-react";
 import { usePockets } from "@/lib/use-pockets";
 import { usePocketMovements } from "@/lib/use-pocket-movements";
-import { useBanks } from "@/lib/use-banks";
 import { computePocketRendimento } from "@/lib/derived";
 import { formatDate, todayIsoDate } from "@/lib/format";
 import { PageFade } from "@/app/_components/PageFade";
@@ -21,7 +20,7 @@ import {
   RowActionButtons,
   ToggleAddButton,
 } from "@/app/_components/SettingsFormKit";
-import type { Bank, Pocket, PocketMovement } from "@/lib/types";
+import type { Pocket, PocketMovement } from "@/lib/types";
 
 export default function CaixinhasPage() {
   const {
@@ -30,14 +29,12 @@ export default function CaixinhasPage() {
     updatePocket,
     removePocket,
     setPocketOculto,
-    adjustSaldo,
     moveFunds,
     registrarRendimento,
     deletePocketMovement,
     transferBetweenPockets,
   } = usePockets();
   const { movements } = usePocketMovements();
-  const { banks } = useBanks();
 
   const [adding, setAdding] = useState(false);
   const [nome, setNome] = useState("");
@@ -196,8 +193,8 @@ export default function CaixinhasPage() {
 
             {pockets.some((p) => p.oculto) && (
               <p className="text-[11px] text-ink-muted">
-                Ocultar (ícone de olho) só tira a caixinha do facilitador na tela inicial — ela continua
-                contando no patrimônio e disponível pra escolher em depósitos/retiradas.
+                Ocultar (ícone de olho) só deixa a caixinha esmaecida aqui — ela continua contando no
+                total guardado.
               </p>
             )}
           </>
@@ -223,9 +220,7 @@ export default function CaixinhasPage() {
 
       <AdjustPocketSheet
         pocket={adjusting}
-        banks={banks}
         movements={movements}
-        onAdjust={adjustSaldo}
         onMoveFunds={moveFunds}
         onRegistrarRendimento={registrarRendimento}
         onDeleteMovement={deletePocketMovement}
@@ -315,27 +310,19 @@ function EditPocketFields({
   );
 }
 
+type MoveFunds = (pocketId: string, tipo: "deposito" | "retirada", valor: number, data?: string) => Promise<void>;
+
 function AdjustPocketSheet({
   pocket,
-  banks,
   movements,
-  onAdjust,
   onMoveFunds,
   onRegistrarRendimento,
   onDeleteMovement,
   onClose,
 }: {
   pocket: Pocket | null;
-  banks: Bank[];
   movements: PocketMovement[];
-  onAdjust: (id: string, delta: number) => Promise<void>;
-  onMoveFunds: (
-    pocketId: string,
-    bancoId: string,
-    tipo: "deposito" | "retirada",
-    valor: number,
-    data?: string,
-  ) => Promise<void>;
+  onMoveFunds: MoveFunds;
   onRegistrarRendimento: (pocketId: string, novoSaldo: number) => Promise<void>;
   onDeleteMovement: (movement: PocketMovement) => Promise<void>;
   onClose: () => void;
@@ -346,9 +333,7 @@ function AdjustPocketSheet({
         <AdjustPocketFields
           key={pocket.id}
           pocket={pocket}
-          banks={banks}
           movements={movements.filter((m) => m.pocketId === pocket.id)}
-          onAdjust={onAdjust}
           onMoveFunds={onMoveFunds}
           onRegistrarRendimento={onRegistrarRendimento}
           onDeleteMovement={onDeleteMovement}
@@ -361,33 +346,21 @@ function AdjustPocketSheet({
 
 function AdjustPocketFields({
   pocket,
-  banks,
   movements,
-  onAdjust,
   onMoveFunds,
   onRegistrarRendimento,
   onDeleteMovement,
   onClose,
 }: {
   pocket: Pocket;
-  banks: Bank[];
   movements: PocketMovement[];
-  onAdjust: (id: string, delta: number) => Promise<void>;
-  onMoveFunds: (
-    pocketId: string,
-    bancoId: string,
-    tipo: "deposito" | "retirada",
-    valor: number,
-    data?: string,
-  ) => Promise<void>;
+  onMoveFunds: MoveFunds;
   onRegistrarRendimento: (pocketId: string, novoSaldo: number) => Promise<void>;
   onDeleteMovement: (movement: PocketMovement) => Promise<void>;
   onClose: () => void;
 }) {
-  const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
   const rendimento = computePocketRendimento(pocket, movements);
   const [modo, setModo] = useState<"adicionar" | "retirar" | "rendimento">("adicionar");
-  const [bancoId, setBancoId] = useState("");
   const [valor, setValor] = useState(0);
   const [data, setData] = useState(todayIsoDate());
   const [saldoInformado, setSaldoInformado] = useState(pocket.saldo);
@@ -424,11 +397,7 @@ function AdjustPocketFields({
 
     setSaving(true);
     try {
-      if (bancoId) {
-        await onMoveFunds(pocket.id, bancoId, modo === "adicionar" ? "deposito" : "retirada", valor, data);
-      } else {
-        await onAdjust(pocket.id, modo === "adicionar" ? valor : -valor);
-      }
+      await onMoveFunds(pocket.id, modo === "adicionar" ? "deposito" : "retirada", valor, data);
       toast.success(modo === "adicionar" ? "Valor adicionado." : "Valor retirado.");
       setValor(0);
       setModo("adicionar");
@@ -511,30 +480,12 @@ function AdjustPocketFields({
       ) : (
         <>
           <CurrencyInput value={valor} onChange={setValor} className={`mt-3 w-full ${INPUT_CLASS}`} />
-
-          {banks.length > 0 && (
-            <select
-              value={bancoId}
-              onChange={(event) => setBancoId(event.target.value)}
-              className={`mt-2 w-full ${INPUT_CLASS}`}
-            >
-              <option value="">Sem banco vinculado</option>
-              {banks.map((banco) => (
-                <option key={banco.id} value={banco.id}>
-                  {modo === "adicionar" ? `Sai de: ${banco.nome}` : `Vai para: ${banco.nome}`}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {bancoId && (
-            <input
-              type="date"
-              value={data}
-              onChange={(event) => setData(event.target.value)}
-              className={`mt-2 w-full ${INPUT_CLASS}`}
-            />
-          )}
+          <input
+            type="date"
+            value={data}
+            onChange={(event) => setData(event.target.value)}
+            className={`mt-2 w-full ${INPUT_CLASS}`}
+          />
         </>
       )}
 
@@ -555,9 +506,6 @@ function AdjustPocketFields({
                 <li key={movimento.id} className="flex items-center justify-between rounded-xl bg-bg px-3 py-2 text-xs">
                   <span>
                     {formatDate(movimento.data)} · {label}
-                    {movimento.bancoId && bankNameById.get(movimento.bancoId)
-                      ? ` · ${bankNameById.get(movimento.bancoId)}`
-                      : ""}
                   </span>
                   <span className="flex items-center gap-2">
                     <span className={isNegative ? "text-negative" : "text-accent-strong"}>

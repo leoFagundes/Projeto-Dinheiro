@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { Repeat, Trash2 } from "lucide-react";
 import { useTransactions } from "@/lib/use-transactions";
 import { useCategories } from "@/lib/use-categories";
-import { useBanks } from "@/lib/use-banks";
 import {
   computeActiveSubscriptions,
   computeNextChargeDate,
@@ -29,14 +28,21 @@ import { BottomSheet } from "@/app/_components/BottomSheet";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import { TransactionFormSheet } from "@/app/_components/TransactionFormSheet";
 import { INPUT_CLASS, SAVE_BUTTON_CLASS } from "@/app/_components/SettingsFormKit";
-import type { Bank, Category, FormaPagamento, Transaction } from "@/lib/types";
+import type { Category, Transaction } from "@/lib/types";
 
 type OrdemAssinatura = "valor" | "dia";
+
+type AjusteAssinatura = {
+  valor: number;
+  categoria: string;
+  descricao: string;
+  recorrenciaIntervalo: "mensal" | "anual";
+  mesInicio: string;
+};
 
 export default function AssinaturasPage() {
   const { transactions, addTransaction, updateTransaction, deleteTransaction } = useTransactions();
   const { categories } = useCategories();
-  const { banks } = useBanks();
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [stopping, setStopping] = useState<Transaction | null>(null);
   const [removing, setRemoving] = useState<Transaction | null>(null);
@@ -54,7 +60,6 @@ export default function AssinaturasPage() {
     .filter((t) => t.tipo === "despesa" && t.recorrenciaIntervalo === "anual")
     .reduce((sum, t) => sum + t.valor, 0);
   const iconByCategoria = mapCategoryIcons(categories);
-  const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
 
   async function handleStop() {
     if (!stopping) return;
@@ -87,15 +92,7 @@ export default function AssinaturasPage() {
     }
   }
 
-  async function handleAdjust(params: {
-    valor: number;
-    categoria: string;
-    descricao: string;
-    bancoId?: string;
-    formaPagamento?: FormaPagamento;
-    recorrenciaIntervalo: "mensal" | "anual";
-    mesInicio: string;
-  }) {
+  async function handleAdjust(params: AjusteAssinatura) {
     if (!adjusting) return;
     await updateTransaction(adjusting.id, { recorrente: false });
     const day = clampDayToMonth(params.mesInicio, Number(adjusting.data.slice(8, 10)));
@@ -107,11 +104,6 @@ export default function AssinaturasPage() {
       data: `${params.mesInicio}-${day}`,
       recorrente: true,
       ...(params.recorrenciaIntervalo === "anual" ? { recorrenciaIntervalo: "anual" } : {}),
-      ...(params.bancoId
-        ? adjusting.tipo === "despesa"
-          ? { bancoId: params.bancoId, formaPagamento: params.formaPagamento ?? "credito" }
-          : { bancoId: params.bancoId }
-        : {}),
     });
   }
 
@@ -198,7 +190,6 @@ export default function AssinaturasPage() {
                           </span>
                           <span className="block truncate text-xs text-ink-muted">
                             <MaskedCurrency value={t.valor} /> · dia {Number(t.data.slice(8, 10))}
-                            {t.bancoId && bankNameById.get(t.bancoId) ? ` · ${bankNameById.get(t.bancoId)}` : ""}
                           </span>
                           <span className="block truncate text-xs text-ink-muted">
                             {proximaCobranca ? `próxima: ${formatDate(proximaCobranca)}` : "sem próxima cobrança"}
@@ -277,7 +268,6 @@ export default function AssinaturasPage() {
         assinatura={adjusting}
         transactions={transactions}
         categories={categories}
-        banks={banks}
         onAdjust={handleAdjust}
         onClose={() => setAdjusting(null)}
       />
@@ -306,32 +296,22 @@ export default function AssinaturasPage() {
 }
 
 /**
- * Ajusta os termos de uma assinatura ativa (valor, categoria, banco...) sem
- * mexer no que já passou: por baixo dos panos, para a assinatura antiga e
- * cria uma nova a partir do mês escolhido — os meses já gerados continuam
- * com o valor de antes.
+ * Ajusta os termos de uma assinatura ativa (valor, categoria...) sem mexer no
+ * que já passou: por baixo dos panos, para a assinatura antiga e cria uma
+ * nova a partir do mês escolhido — os meses já gerados continuam com o valor
+ * de antes.
  */
 function AjustarAssinaturaSheet({
   assinatura,
   transactions,
   categories,
-  banks,
   onAdjust,
   onClose,
 }: {
   assinatura: Transaction | null;
   transactions: Transaction[];
   categories: Category[];
-  banks: Bank[];
-  onAdjust: (params: {
-    valor: number;
-    categoria: string;
-    descricao: string;
-    bancoId?: string;
-    formaPagamento?: FormaPagamento;
-    recorrenciaIntervalo: "mensal" | "anual";
-    mesInicio: string;
-  }) => Promise<void>;
+  onAdjust: (params: AjusteAssinatura) => Promise<void>;
   onClose: () => void;
 }) {
   return (
@@ -342,7 +322,6 @@ function AjustarAssinaturaSheet({
           assinatura={assinatura}
           transactions={transactions}
           categories={categories}
-          banks={banks}
           onAdjust={onAdjust}
           onClose={onClose}
         />
@@ -355,23 +334,13 @@ function AjustarAssinaturaFields({
   assinatura,
   transactions,
   categories,
-  banks,
   onAdjust,
   onClose,
 }: {
   assinatura: Transaction;
   transactions: Transaction[];
   categories: Category[];
-  banks: Bank[];
-  onAdjust: (params: {
-    valor: number;
-    categoria: string;
-    descricao: string;
-    bancoId?: string;
-    formaPagamento?: FormaPagamento;
-    recorrenciaIntervalo: "mensal" | "anual";
-    mesInicio: string;
-  }) => Promise<void>;
+  onAdjust: (params: AjusteAssinatura) => Promise<void>;
   onClose: () => void;
 }) {
   const thisMonth = currentMonthKey();
@@ -385,10 +354,6 @@ function AjustarAssinaturaFields({
   const [valor, setValor] = useState(assinatura.valor);
   const [descricao, setDescricao] = useState(assinatura.descricao);
   const [categoria, setCategoria] = useState(assinatura.categoria);
-  const [bancoId, setBancoId] = useState(assinatura.bancoId ?? "");
-  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>(
-    assinatura.formaPagamento ?? "credito",
-  );
   const [recorrenciaIntervalo, setRecorrenciaIntervalo] = useState<"mensal" | "anual">(
     assinatura.recorrenciaIntervalo ?? "mensal",
   );
@@ -412,8 +377,6 @@ function AjustarAssinaturaFields({
         valor,
         categoria,
         descricao: descricao.trim(),
-        bancoId: bancoId || undefined,
-        formaPagamento,
         recorrenciaIntervalo,
         mesInicio,
       });
@@ -450,42 +413,6 @@ function AjustarAssinaturaFields({
               </option>
             ))}
           </select>
-        )}
-        {banks.length > 0 && (
-          <select value={bancoId} onChange={(event) => setBancoId(event.target.value)} className={INPUT_CLASS}>
-            <option value="">Sem banco vinculado</option>
-            {banks.map((banco) => (
-              <option key={banco.id} value={banco.id}>
-                {banco.nome}
-              </option>
-            ))}
-          </select>
-        )}
-        {assinatura.tipo === "despesa" && bancoId !== "" && (
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setFormaPagamento("credito")}
-              className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition-colors ${
-                formaPagamento === "credito"
-                  ? "border-accent bg-accent-soft text-accent-strong"
-                  : "border-border text-ink-muted"
-              }`}
-            >
-              Crédito
-            </button>
-            <button
-              type="button"
-              onClick={() => setFormaPagamento("debito")}
-              className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition-colors ${
-                formaPagamento === "debito"
-                  ? "border-accent bg-accent-soft text-accent-strong"
-                  : "border-border text-ink-muted"
-              }`}
-            >
-              Débito
-            </button>
-          </div>
         )}
         <div className="grid grid-cols-2 gap-2">
           <button

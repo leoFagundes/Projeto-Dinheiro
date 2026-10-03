@@ -101,8 +101,7 @@ export function useInvestments() {
    * rendimento "desaparecia" do valor exibido). Resgate pode ir até o
    * `saldoAtual` (que já inclui rendimento) — só o custo (`valorInvestido`)
    * fica travado em 0 em vez de negativo, já que não faz sentido custo
-   * negativo. Quando `bancoId` é informado, o valor sai (aporte) ou volta
-   * (resgate) do saldo em conta desse banco.
+   * negativo.
    */
   const moveInvestment = useCallback(
     async (
@@ -110,7 +109,6 @@ export function useInvestments() {
       tipo: "aporte" | "resgate",
       valor: number,
       cotas?: number,
-      bancoId?: string,
       data: string = todayIsoDate(),
     ) => {
       if (!user) return;
@@ -142,7 +140,6 @@ export function useInvestments() {
           tipo,
           valor,
           ...(cotas ? { cotas } : {}),
-          ...(bancoId ? { bancoId } : {}),
           custoDelta,
           ...(saldoDelta !== undefined ? { saldoDelta } : {}),
           data,
@@ -155,7 +152,7 @@ export function useInvestments() {
 
   /**
    * Registra o rendimento de um investimento: o usuário informa o valor atual
-   * real (cotação/saldo do banco) e o delta em relação ao valor atual
+   * real (cotação/saldo na corretora) e o delta em relação ao valor atual
    * anterior vira um movimento "rendimento" — não mexe em `valorInvestido`
    * (que continua sendo só o que foi realmente aportado).
    */

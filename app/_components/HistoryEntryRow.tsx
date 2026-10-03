@@ -3,25 +3,14 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
-import {
-  ArrowLeftRight,
-  PiggyBank,
-  Receipt,
-  Repeat,
-  SlidersHorizontal,
-  Trash2,
-  TrendingUp,
-} from "lucide-react";
+import { ArrowLeftRight, PiggyBank, Repeat, Trash2, TrendingUp } from "lucide-react";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Money, MaskedCurrency } from "./Money";
 import { formatDate } from "@/lib/format";
 import type { HistoryEntry } from "@/lib/derived";
 
 const ICON_BY_TIPO = {
-  transferencia: ArrowLeftRight,
   transferencia_caixinha: ArrowLeftRight,
-  pagamento_fatura: Receipt,
-  ajuste_fatura: SlidersHorizontal,
   caixinha: PiggyBank,
   investimento: TrendingUp,
   // Só chega aqui uma receita/despesa sem `onDelete`/transaction real: uma
@@ -97,7 +86,7 @@ export function HistoryEntryRow({ entry }: { entry: HistoryEntry }) {
       <ConfirmDialog
         open={confirming}
         title="Excluir este item?"
-        description="Desfaz exatamente o que ele alterou nos saldos envolvidos (banco, caixinha ou investimento)."
+        description="Desfaz exatamente o que ele alterou nos saldos envolvidos (caixinha ou investimento)."
         confirmLabel="Excluir"
         danger
         onConfirm={handleConfirmDelete}

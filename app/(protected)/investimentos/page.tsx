@@ -6,7 +6,6 @@ import { Check, ChevronDown, ChevronUp, Trash2, TrendingUp } from "lucide-react"
 import { useInvestments } from "@/lib/use-investments";
 import { useInvestmentMovements } from "@/lib/use-investment-movements";
 import { useInvestmentGoals } from "@/lib/use-investment-goals";
-import { useBanks } from "@/lib/use-banks";
 import {
   computeCumulativeContributions,
   computeInvestmentComposition,
@@ -17,7 +16,6 @@ import {
 } from "@/lib/derived";
 import { currentYear, formatDate, formatMonthLabel, formatPercent, todayIsoDate } from "@/lib/format";
 import type {
-  Bank,
   Investment,
   InvestmentGoal,
   InvestmentMovement,
@@ -53,7 +51,6 @@ export default function InvestimentosPage() {
   } = useInvestments();
   const { movements } = useInvestmentMovements();
   const { goals, addGoal, removeGoal } = useInvestmentGoals();
-  const { banks } = useBanks();
 
   const anos = computeInvestmentYears(movements);
   const [ano, setAno] = useState(anos[0]);
@@ -196,8 +193,8 @@ export default function InvestimentosPage() {
               </ul>
               {investments.some((inv) => inv.oculto) && (
                 <p className="mt-2 text-[11px] text-ink-muted">
-                  Ocultar (ícone de olho) só tira o investimento do facilitador na tela inicial — ele
-                  continua contando no patrimônio.
+                  Ocultar (ícone de olho) só deixa o investimento esmaecido aqui — ele continua
+                  contando no valor total.
                 </p>
               )}
             </section>
@@ -225,7 +222,6 @@ export default function InvestimentosPage() {
       <MoveInvestmentSheet
         investment={moving}
         movements={movements}
-        banks={banks}
         onMove={moveInvestment}
         onRegistrarRendimento={registrarRendimento}
         onDeleteMovement={deleteInvestmentMovement}
@@ -656,10 +652,17 @@ function AtivoFicha({
   );
 }
 
+type MoveInvestment = (
+  id: string,
+  tipo: "aporte" | "resgate",
+  valor: number,
+  cotas?: number,
+  data?: string,
+) => Promise<void>;
+
 function MoveInvestmentSheet({
   investment,
   movements,
-  banks,
   onMove,
   onRegistrarRendimento,
   onDeleteMovement,
@@ -667,15 +670,7 @@ function MoveInvestmentSheet({
 }: {
   investment: Investment | null;
   movements: InvestmentMovement[];
-  banks: Bank[];
-  onMove: (
-    id: string,
-    tipo: "aporte" | "resgate",
-    valor: number,
-    cotas?: number,
-    bancoId?: string,
-    data?: string,
-  ) => Promise<void>;
+  onMove: MoveInvestment;
   onRegistrarRendimento: (investimentoId: string, novoSaldoAtual: number) => Promise<void>;
   onDeleteMovement: (movement: InvestmentMovement) => Promise<void>;
   onClose: () => void;
@@ -687,7 +682,6 @@ function MoveInvestmentSheet({
           key={investment.id}
           investment={investment}
           movements={movements.filter((m) => m.investimentoId === investment.id)}
-          banks={banks}
           onMove={onMove}
           onRegistrarRendimento={onRegistrarRendimento}
           onDeleteMovement={onDeleteMovement}
@@ -701,7 +695,6 @@ function MoveInvestmentSheet({
 function MoveInvestmentFields({
   investment,
   movements,
-  banks,
   onMove,
   onRegistrarRendimento,
   onDeleteMovement,
@@ -709,27 +702,17 @@ function MoveInvestmentFields({
 }: {
   investment: Investment;
   movements: InvestmentMovement[];
-  banks: Bank[];
-  onMove: (
-    id: string,
-    tipo: "aporte" | "resgate",
-    valor: number,
-    cotas?: number,
-    bancoId?: string,
-    data?: string,
-  ) => Promise<void>;
+  onMove: MoveInvestment;
   onRegistrarRendimento: (investimentoId: string, novoSaldoAtual: number) => Promise<void>;
   onDeleteMovement: (movement: InvestmentMovement) => Promise<void>;
   onClose: () => void;
 }) {
   const isVariavel = investment.tipo === "rendaVariavel";
-  const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
   const valorAtual = investment.saldoAtual ?? investment.valorInvestido;
   const rendimento = valorAtual - investment.valorInvestido;
   const [modo, setModo] = useState<"aporte" | "resgate" | "rendimento">("aporte");
   const [valor, setValor] = useState(0);
   const [cotas, setCotas] = useState("");
-  const [bancoId, setBancoId] = useState("");
   const [data, setData] = useState(todayIsoDate());
   const [saldoInformado, setSaldoInformado] = useState(valorAtual);
   const [saving, setSaving] = useState(false);
@@ -766,7 +749,7 @@ function MoveInvestmentFields({
     setSaving(true);
     try {
       const cotasNum = isVariavel && cotas ? Number(cotas) : undefined;
-      await onMove(investment.id, modo, valor, cotasNum, bancoId || undefined, data);
+      await onMove(investment.id, modo, valor, cotasNum, data);
       toast.success(modo === "aporte" ? "Aporte registrado." : "Resgate registrado.");
       setValor(0);
       setCotas("");
@@ -845,7 +828,7 @@ function MoveInvestmentFields({
       {modo === "rendimento" ? (
         <>
           <p className="mt-3 text-xs text-ink-muted">
-            Informe o valor atual real desse investimento (cotação/saldo do banco). A diferença vira
+            Informe o valor atual real desse investimento (cotação/saldo na corretora). A diferença vira
             rendimento, sem contar como novo aporte.
           </p>
           <CurrencyInput
@@ -875,21 +858,6 @@ function MoveInvestmentFields({
             />
           )}
 
-          {banks.length > 0 && (
-            <select
-              value={bancoId}
-              onChange={(event) => setBancoId(event.target.value)}
-              className={`mt-2 w-full ${INPUT_CLASS}`}
-            >
-              <option value="">Sem banco vinculado</option>
-              {banks.map((banco) => (
-                <option key={banco.id} value={banco.id}>
-                  {modo === "aporte" ? `Sai de: ${banco.nome}` : `Vai para: ${banco.nome}`}
-                </option>
-              ))}
-            </select>
-          )}
-
           <input
             type="date"
             value={data}
@@ -917,9 +885,6 @@ function MoveInvestmentFields({
                   <span>
                     {formatDate(movimento.data)} · {label}
                     {movimento.cotas ? ` · ${movimento.cotas} cotas` : ""}
-                    {movimento.bancoId && bankNameById.get(movimento.bancoId)
-                      ? ` · ${bankNameById.get(movimento.bancoId)}`
-                      : ""}
                   </span>
                   <span className="flex items-center gap-2">
                     <span className={isNegative ? "text-negative" : "text-accent-strong"}>
@@ -944,7 +909,7 @@ function MoveInvestmentFields({
       <ConfirmDialog
         open={removing !== null}
         title="Excluir movimento?"
-        description="Desfaz exatamente o que esse movimento alterou no investimento (e no banco vinculado, se houver)."
+        description="Desfaz exatamente o que esse movimento alterou no investimento."
         confirmLabel="Excluir"
         danger
         onConfirm={handleDeleteMovement}

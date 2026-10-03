@@ -1,21 +1,6 @@
-import {
-  computeBankFaturaAjustada,
-  computeBankSaldoContaAsOf,
-  computeCategoryBreakdown,
-  computeMonthTotals,
-  computePocketRendimento,
-} from "./derived";
+import { computeCategoryBreakdown, computeMonthTotals, computePocketRendimento } from "./derived";
 import { formatMonthLabel, monthKeyOfIsoDate } from "./format";
-import type {
-  Bank,
-  BankPayment,
-  BankTransfer,
-  Investment,
-  InvestmentMovement,
-  Pocket,
-  PocketMovement,
-  Transaction,
-} from "./types";
+import type { Investment, Pocket, PocketMovement, Transaction } from "./types";
 
 function escapeCsvField(value: string): string {
   if (/[",\n;]/.test(value)) {
@@ -36,35 +21,20 @@ function toCsvBlock(header: string[], rows: string[][]): string {
 export type MonthlyReportInput = {
   transactions: Transaction[];
   monthKey: string;
-  banks: Bank[];
   pockets: Pocket[];
   investments: Investment[];
   pocketMovements: PocketMovement[];
-  bankPayments: BankPayment[];
-  investmentMovements: InvestmentMovement[];
-  bankTransfers: BankTransfer[];
 };
 
 /**
  * Monta um relatório financeiro completo de um mês: resumo, transações
- * detalhadas, gastos por categoria, situação de cada banco e o retrato atual
- * de caixinhas/investimentos (que não são mensais, mas ajudam a fechar o
- * panorama). Separador ";" e decimal com vírgula pra abrir bem no Excel BR.
+ * detalhadas, gastos por categoria e o retrato atual de caixinhas/
+ * investimentos (que não são mensais, mas ajudam a fechar o panorama).
+ * Separador ";" e decimal com vírgula pra abrir bem no Excel BR.
  */
 export function buildMonthlyReportCsv(input: MonthlyReportInput): string {
-  const {
-    transactions,
-    monthKey,
-    banks,
-    pockets,
-    investments,
-    pocketMovements,
-    bankPayments,
-    investmentMovements,
-    bankTransfers,
-  } = input;
+  const { transactions, monthKey, pockets, investments, pocketMovements } = input;
 
-  const bankNameById = new Map(banks.map((b) => [b.id, b.nome]));
   const monthTransactions = transactions
     .filter((t) => monthKeyOfIsoDate(t.data) === monthKey)
     .sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0));
@@ -86,25 +56,13 @@ export function buildMonthlyReportCsv(input: MonthlyReportInput): string {
   );
 
   const transacoesCsv = toCsvBlock(
-    [
-      "Data",
-      "Tipo",
-      "Categoria",
-      "Descrição",
-      "Valor",
-      "Forma de pagamento",
-      "Banco",
-      "Recorrente",
-      "Parcela",
-    ],
+    ["Data", "Tipo", "Categoria", "Descrição", "Valor", "Recorrente", "Parcela"],
     monthTransactions.map((t) => [
       t.data,
       t.tipo === "receita" ? "Receita" : "Despesa",
       escapeCsvField(t.categoria),
       escapeCsvField(t.descricao),
       formatNumberBr(t.valor),
-      t.tipo === "despesa" ? (t.formaPagamento === "debito" ? "Débito" : "Crédito") : "",
-      t.bancoId ? escapeCsvField(bankNameById.get(t.bancoId) ?? "Banco removido") : "",
       t.recorrente ? "Sim" : "Não",
       t.parcelaTotal ? `${t.parcelaAtual}/${t.parcelaTotal}` : "",
     ]),
@@ -122,32 +80,6 @@ export function buildMonthlyReportCsv(input: MonthlyReportInput): string {
           formatNumberBr(item.total),
           despesas > 0 ? `${((item.total / despesas) * 100).toFixed(1)}%` : "0%",
         ]),
-      ),
-    );
-  }
-
-  if (banks.length > 0) {
-    blocks.push(
-      toCsvBlock(
-        ["Banco", "Fatura do mês", "Saldo em conta (fim do mês)", "Saldo anterior"],
-        banks.map((b) => {
-          const fatura = computeBankFaturaAjustada(b.id, transactions, monthKey, banks, bankPayments);
-          const saldoConta = computeBankSaldoContaAsOf(
-            b,
-            monthKey,
-            transactions,
-            pocketMovements,
-            bankPayments,
-            investmentMovements,
-            bankTransfers,
-          );
-          return [
-            escapeCsvField(b.nome),
-            formatNumberBr(fatura),
-            formatNumberBr(saldoConta),
-            formatNumberBr(b.saldoDevedor),
-          ];
-        }),
       ),
     );
   }

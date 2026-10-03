@@ -9,14 +9,12 @@ export function RecentTransactions({
   onDelete,
   colorByCategoria,
   iconByCategoria,
-  bankNameById,
   originDateById,
 }: {
   transactions: Transaction[];
   onDelete: (id: string) => Promise<void>;
   colorByCategoria: Map<string, string>;
   iconByCategoria: Map<string, string>;
-  bankNameById: Map<string, string>;
   originDateById?: Map<string, string>;
 }) {
   if (transactions.length === 0) {
@@ -39,7 +37,6 @@ export function RecentTransactions({
             onDelete={onDelete}
             colorByCategoria={colorByCategoria}
             iconByCategoria={iconByCategoria}
-            bankNameById={bankNameById}
             originDateById={originDateById}
           />
         ))}

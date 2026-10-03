@@ -182,7 +182,7 @@ export function CategoryPieChart({
   );
 }
 
-/** Pizza + legenda genéricas pra qualquer breakdown simples (banco, forma de pagamento). */
+/** Pizza + legenda genéricas pra qualquer breakdown simples (ex: composição da carteira). */
 export function BreakdownChart({
   data,
   emptyTitle,
@@ -264,7 +264,7 @@ export function BreakdownChart({
   );
 }
 
-/** Linha/área genérica pra qualquer evolução mensal de um único valor (patrimônio, aportes acumulados, etc.). */
+/** Linha/área genérica pra qualquer evolução mensal de um único valor (ex: aportes acumulados). */
 export function AreaTrendChart({
   data,
   label,
@@ -373,11 +373,7 @@ export function SingleSeriesBarChart({
   );
 }
 
-/**
- * Receitas x despesas por mês — não é um saldo acumulado (esse conceito hoje
- * é o Patrimônio, que depende do estado atual de bancos/caixinhas/investimentos,
- * não dá pra reconstruir com precisão só a partir do histórico de transações).
- */
+/** Receitas x despesas por mês — cada mês é independente, não um saldo acumulado. */
 export function MonthlyFlowChart({
   data,
 }: {

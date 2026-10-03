@@ -1,12 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
-import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
 import { useTransactions } from "@/lib/use-transactions";
 import { useCategories } from "@/lib/use-categories";
-import { useBanks } from "@/lib/use-banks";
 import { useSeenFeature } from "@/lib/use-seen-feature";
 import { formatCurrency, todayIsoDate } from "@/lib/format";
 import { FALLBACK_CATEGORY_ICON } from "@/lib/categories";
@@ -14,7 +13,126 @@ import { BottomSheet } from "./BottomSheet";
 import { CurrencyInput } from "./CurrencyInput";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { NewBadge } from "./NewBadge";
-import type { FormaPagamento, Transaction, TransactionType } from "@/lib/types";
+import { CategoryCreateSheet } from "./CategoryCreateForm";
+import type { Transaction, TransactionType } from "@/lib/types";
+
+/**
+ * "Empréstimo" é um modo de criação à parte (gera receita + parcelas de uma
+ * vez, ver addLoan) — não existe como `tipo` de verdade no Firestore, então
+ * nunca aparece ao editar uma transação já salva.
+ */
+type Modo = TransactionType | "emprestimo";
+
+type FormState = {
+  modo: Modo;
+  valor: number;
+  categoriaEscolhida: string;
+  descricao: string;
+  data: string;
+  recorrente: boolean;
+  recorrenteFim: string;
+  recorrenciaIntervalo: "mensal" | "anual";
+  parcelar: boolean;
+  numParcelas: string;
+  parcelaInicial: string;
+  valorTotalPagar: number;
+  numParcelasEmprestimo: string;
+  dataPrimeiraParcela: string;
+};
+
+function emptyForm(): FormState {
+  const hoje = todayIsoDate();
+  return {
+    modo: "despesa",
+    valor: 0,
+    categoriaEscolhida: "",
+    descricao: "",
+    data: hoje,
+    recorrente: false,
+    recorrenteFim: "",
+    recorrenciaIntervalo: "mensal",
+    parcelar: false,
+    numParcelas: "2",
+    parcelaInicial: "1",
+    valorTotalPagar: 0,
+    numParcelasEmprestimo: "2",
+    dataPrimeiraParcela: hoje,
+  };
+}
+
+function formFromTransaction(t: Transaction): FormState {
+  return {
+    ...emptyForm(),
+    modo: t.tipo,
+    valor: t.valor,
+    categoriaEscolhida: t.categoria,
+    descricao: t.descricao,
+    data: t.data,
+    recorrente: t.recorrente,
+    recorrenteFim: t.recorrenteFim ?? "",
+    recorrenciaIntervalo: t.recorrenciaIntervalo ?? "mensal",
+  };
+}
+
+function isFormDirty(form: FormState): boolean {
+  const vazio = emptyForm();
+  return (
+    form.modo !== vazio.modo ||
+    form.valor > 0 ||
+    form.descricao.trim() !== "" ||
+    form.categoriaEscolhida !== "" ||
+    form.data !== vazio.data ||
+    form.recorrente ||
+    form.parcelar ||
+    form.valorTotalPagar > 0
+  );
+}
+
+// Rascunho de uma transação NOVA (nunca de edição), por conta — sobrevive a
+// fechar o modal e até a fechar o app (ex: sair pra conferir um valor no app
+// do banco e voltar). Só some ao salvar com sucesso ou tocar em "Limpar".
+const DRAFT_KEY_PREFIX = "rascunhoTransacao:";
+
+function loadDraft(uid: string): FormState | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY_PREFIX + uid);
+    if (!raw) return null;
+    const { form, salvoEm } = JSON.parse(raw) as { form: Partial<FormState>; salvoEm: string };
+    const restaurado = { ...emptyForm(), ...form };
+    const hoje = todayIsoDate();
+    if (salvoEm === hoje) return restaurado;
+    // Rascunho de outro dia: data que ainda estava em "hoje" daquele dia
+    // (provavelmente nunca foi mexida) acompanha o dia de hoje.
+    return {
+      ...restaurado,
+      data: restaurado.data === salvoEm ? hoje : restaurado.data,
+      dataPrimeiraParcela:
+        restaurado.dataPrimeiraParcela === salvoEm ? hoje : restaurado.dataPrimeiraParcela,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(uid: string, form: FormState) {
+  try {
+    if (isFormDirty(form)) {
+      localStorage.setItem(DRAFT_KEY_PREFIX + uid, JSON.stringify({ form, salvoEm: todayIsoDate() }));
+    } else {
+      localStorage.removeItem(DRAFT_KEY_PREFIX + uid);
+    }
+  } catch {
+    // armazenamento indisponível (ex: navegação privada) — só não guarda rascunho
+  }
+}
+
+function clearDraft(uid: string) {
+  try {
+    localStorage.removeItem(DRAFT_KEY_PREFIX + uid);
+  } catch {
+    // idem
+  }
+}
 
 export function TransactionFormSheet({
   open,
@@ -44,6 +162,7 @@ function TransactionFormFields({
   transaction?: Transaction;
   onClose: () => void;
 }) {
+  const { user } = useAuth();
   const {
     addTransaction,
     addInstallmentPurchase,
@@ -51,103 +170,68 @@ function TransactionFormFields({
     updateTransaction,
     cancelRemainingInstallments,
   } = useTransactions();
-  const { byType: categoriesByType } = useCategories();
-  const { banks } = useBanks();
+  const { categories, byType: categoriesByType, addCategory } = useCategories();
   const { seen: seenEmprestimo, markSeen: markEmprestimoSeen } = useSeenFeature("aba-emprestimo");
   const [submitting, setSubmitting] = useState(false);
   const [confirmingCancelParcelas, setConfirmingCancelParcelas] = useState(false);
+  const [creatingCategory, setCreatingCategory] = useState(false);
 
   const isEditing = transaction !== undefined;
+  const draftKey = !isEditing && user ? user.uid : null;
+  const [form, setForm] = useState<FormState>(() => {
+    if (transaction) return formFromTransaction(transaction);
+    return (draftKey ? loadDraft(draftKey) : null) ?? emptyForm();
+  });
+  const [draftRestaurado, setDraftRestaurado] = useState(() => !isEditing && isFormDirty(form));
+
+  useEffect(() => {
+    if (draftKey) saveDraft(draftKey, form);
+  }, [draftKey, form]);
+
+  function update(patch: Partial<FormState>) {
+    setForm((prev) => ({ ...prev, ...patch }));
+  }
+
   const isRecurringChild = isEditing && Boolean(transaction?.recorrenteOrigemId);
   // O próprio template de uma assinatura (não uma instância gerada dele) —
-  // editar valor/categoria/banco aqui também muda as próximas cobranças
-  // ainda não geradas, já que elas copiam esses campos do template na hora
-  // de gerar. Sem avisar isso, parecia um ajuste só daquele mês.
+  // editar valor/categoria aqui também muda as próximas cobranças ainda não
+  // geradas, já que elas copiam esses campos do template na hora de gerar.
+  // Sem avisar isso, parecia um ajuste só daquele mês.
   const isRecurringTemplate = isEditing && Boolean(transaction?.recorrente) && !isRecurringChild;
 
-  // "Empréstimo" é um modo de criação à parte (gera receita + parcelas de
-  // uma vez, ver addLoan) — não existe como `tipo` de verdade no Firestore,
-  // então nunca aparece ao editar uma transação já salva.
-  const [modo, setModo] = useState<TransactionType | "emprestimo">(transaction?.tipo ?? "despesa");
+  const { modo, valor, descricao, data, recorrente, recorrenteFim, recorrenciaIntervalo, parcelar } = form;
   const tipo: TransactionType = modo === "emprestimo" ? "despesa" : modo;
-  const [valor, setValor] = useState(transaction?.valor ?? 0);
-  const [categoriaEscolhida, setCategoriaEscolhida] = useState(transaction?.categoria ?? "");
-  const [bancoId, setBancoId] = useState(transaction?.bancoId ?? "");
-  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>(
-    transaction?.formaPagamento ?? "credito",
-  );
-  const [descricao, setDescricao] = useState(transaction?.descricao ?? "");
-  const [data, setData] = useState(transaction?.data ?? todayIsoDate());
-  const [recorrente, setRecorrente] = useState(transaction?.recorrente ?? false);
-  const [recorrenteFim, setRecorrenteFim] = useState(transaction?.recorrenteFim ?? "");
-  const [recorrenciaIntervalo, setRecorrenciaIntervalo] = useState<"mensal" | "anual">(
-    transaction?.recorrenciaIntervalo ?? "mensal",
-  );
-  const [parcelar, setParcelar] = useState(false);
-  const [numParcelas, setNumParcelas] = useState("2");
-  const [parcelaInicial, setParcelaInicial] = useState("1");
-  const [valorTotalPagar, setValorTotalPagar] = useState(0);
-  const [numParcelasEmprestimo, setNumParcelasEmprestimo] = useState("2");
-  const [dataPrimeiraParcela, setDataPrimeiraParcela] = useState(todayIsoDate());
-
-  const categoriaOptions = categoriesByType(tipo);
+  const categoriaOptions = [...categoriesByType(tipo)].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   // Deriva a categoria efetivamente selecionada em vez de sincronizar via
-  // efeito: se a escolha anterior não existe mais nesta lista, cai na primeira.
-  const categoria = categoriaOptions.some((c) => c.nome === categoriaEscolhida)
-    ? categoriaEscolhida
-    : categoriaOptions[0]?.nome ?? "";
+  // efeito: se a escolha anterior não existe nesta lista, cai na primeira.
+  const categoria = categoriaOptions.some((c) => c.nome === form.categoriaEscolhida)
+    ? form.categoriaEscolhida
+    : (categoriaOptions[0]?.nome ?? "");
 
-  // Parcelamento só faz sentido para uma despesa nova, no crédito, vinculada a um banco.
-  const podeParcelar =
-    !isEditing && modo === "despesa" && bancoId !== "" && formaPagamento === "credito";
-  const parcelasCount = Math.min(24, Math.max(2, Math.round(Number(numParcelas)) || 2));
+  // Parcelamento só faz sentido para uma despesa nova.
+  const podeParcelar = !isEditing && modo === "despesa";
+  const parcelasCount = Math.min(24, Math.max(2, Math.round(Number(form.numParcelas)) || 2));
   const parcelaInicialCount = Math.min(
     parcelasCount,
-    Math.max(1, Math.round(Number(parcelaInicial)) || 1),
+    Math.max(1, Math.round(Number(form.parcelaInicial)) || 1),
   );
 
   // Empréstimo: valor recebido vira receita na hora; valor total a pagar
-  // vira parcelas no débito.
+  // vira parcelas mensais.
   const isEmprestimo = !isEditing && modo === "emprestimo";
   const parcelasCountEmprestimo = Math.min(
     120,
-    Math.max(1, Math.round(Number(numParcelasEmprestimo)) || 1),
+    Math.max(1, Math.round(Number(form.numParcelasEmprestimo)) || 1),
   );
 
-  function changeModo(next: TransactionType | "emprestimo") {
-    setModo(next);
-    if (next !== "despesa") setParcelar(false);
-    if (next === "emprestimo") {
-      markEmprestimoSeen();
-      if (!bancoId && banks.length > 0) setBancoId(banks[0].id);
-    }
+  function changeModo(next: Modo) {
+    update(next === "despesa" ? { modo: next } : { modo: next, parcelar: false });
+    if (next === "emprestimo") markEmprestimoSeen();
   }
 
-  function changeBanco(next: string) {
-    setBancoId(next);
-    if (!next) setParcelar(false);
-  }
-
-  function changeFormaPagamento(next: FormaPagamento) {
-    setFormaPagamento(next);
-    if (next === "debito") setParcelar(false);
-  }
-
-  function resetForm() {
-    setModo("despesa");
-    setValor(0);
-    setDescricao("");
-    setData(todayIsoDate());
-    setRecorrente(false);
-    setRecorrenteFim("");
-    setRecorrenciaIntervalo("mensal");
-    setParcelar(false);
-    setNumParcelas("2");
-    setParcelaInicial("1");
-    setFormaPagamento("credito");
-    setValorTotalPagar(0);
-    setNumParcelasEmprestimo("2");
-    setDataPrimeiraParcela(todayIsoDate());
+  function handleReset() {
+    setForm(emptyForm());
+    setDraftRestaurado(false);
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -161,14 +245,10 @@ function TransactionFormFields({
       return;
     }
     if (!categoria) {
-      toast.error("Cadastre uma categoria antes de continuar.");
+      toast.error("Crie uma categoria antes de continuar.");
       return;
     }
-    if (isEmprestimo && !bancoId) {
-      toast.error("Selecione um banco para o empréstimo.");
-      return;
-    }
-    if (isEmprestimo && (!valorTotalPagar || valorTotalPagar <= 0)) {
+    if (isEmprestimo && (!form.valorTotalPagar || form.valorTotalPagar <= 0)) {
       toast.error("Informe o valor total a pagar do empréstimo.");
       return;
     }
@@ -185,13 +265,11 @@ function TransactionFormFields({
           recorrente,
           recorrenteFim: recorrente ? recorrenteFim : "",
           recorrenciaIntervalo: recorrente ? recorrenciaIntervalo : "",
-          bancoId,
-          formaPagamento: tipo === "despesa" ? formaPagamento : "",
         });
         toast.success("Transação atualizada.");
       } else if (podeParcelar && parcelar) {
         await addInstallmentPurchase(
-          { valorTotal: valor, categoria, descricao: descricao.trim(), data, bancoId },
+          { valorTotal: valor, categoria, descricao: descricao.trim(), data },
           parcelasCount,
           parcelaInicialCount,
         );
@@ -200,16 +278,15 @@ function TransactionFormFields({
         await addLoan(
           {
             valorRecebido: valor,
-            valorTotalPagar,
+            valorTotalPagar: form.valorTotalPagar,
             categoria,
             descricao: descricao.trim(),
             dataRecebimento: data,
-            dataPrimeiraParcela,
-            bancoId,
+            dataPrimeiraParcela: form.dataPrimeiraParcela,
           },
           parcelasCountEmprestimo,
         );
-        toast.success(`Empréstimo registrado em ${parcelasCountEmprestimo}x no débito.`);
+        toast.success(`Empréstimo registrado em ${parcelasCountEmprestimo}x.`);
       } else {
         await addTransaction({
           valor,
@@ -220,11 +297,10 @@ function TransactionFormFields({
           recorrente,
           ...(recorrente && recorrenteFim ? { recorrenteFim } : {}),
           ...(recorrente && recorrenciaIntervalo === "anual" ? { recorrenciaIntervalo } : {}),
-          ...(bancoId ? (tipo === "despesa" ? { bancoId, formaPagamento } : { bancoId }) : {}),
         });
         toast.success("Transação adicionada.");
       }
-      resetForm();
+      if (draftKey) clearDraft(draftKey);
       onClose();
     } catch {
       toast.error("Não foi possível salvar a transação.");
@@ -259,23 +335,34 @@ function TransactionFormFields({
 
   return (
     <>
-      <div className="mb-4 flex items-center justify-between">
-        <p className="font-medium">{isEditing ? "Editar transação" : "Nova transação"}</p>
-        <button
-          onClick={onClose}
-          className="text-ink-muted transition-transform active:scale-90 hover:text-ink"
-          aria-label="Fechar"
-        >
-          <X size={20} />
-        </button>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <p className="font-medium">{isEditing ? "Editar transação" : "Nova transação"}</p>
+          {draftRestaurado && <p className="text-xs text-ink-muted">Rascunho restaurado</p>}
+        </div>
+        <div className="flex items-center gap-3">
+          {!isEditing && isFormDirty(form) && (
+            <button
+              type="button"
+              onClick={handleReset}
+              className="flex items-center gap-1 text-xs font-medium text-ink-muted transition-transform active:scale-95 hover:text-ink"
+            >
+              <RotateCcw size={13} />
+              Limpar
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="text-ink-muted transition-transform active:scale-90 hover:text-ink"
+            aria-label="Fechar"
+          >
+            <X size={20} />
+          </button>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <div
-          className={`grid gap-2 ${
-            !isEditing && banks.length > 0 ? "grid-cols-3" : "grid-cols-2"
-          }`}
-        >
+        <div className={`grid gap-2 ${isEditing ? "grid-cols-2" : "grid-cols-3"}`}>
           <button
             type="button"
             onClick={() => changeModo("despesa")}
@@ -298,7 +385,7 @@ function TransactionFormFields({
           >
             Receita
           </button>
-          {!isEditing && banks.length > 0 && (
+          {!isEditing && (
             <button
               type="button"
               onClick={() => changeModo("emprestimo")}
@@ -319,7 +406,7 @@ function TransactionFormFields({
         )}
         <CurrencyInput
           value={valor}
-          onChange={setValor}
+          onChange={(next) => update({ valor: next })}
           className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
         />
 
@@ -327,73 +414,38 @@ function TransactionFormFields({
           type="text"
           placeholder="Descrição"
           value={descricao}
-          onChange={(event) => setDescricao(event.target.value)}
+          onChange={(event) => update({ descricao: event.target.value })}
           className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
         />
 
-        {categoriaOptions.length > 0 ? (
-          <select
-            value={categoria}
-            onChange={(event) => setCategoriaEscolhida(event.target.value)}
-            className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
-          >
+        <div>
+          <p className="mb-1.5 text-xs text-ink-muted">Categoria</p>
+          <div className="flex flex-wrap gap-1.5">
             {categoriaOptions.map((option) => (
-              <option key={option.id} value={option.nome}>
-                {option.icone ?? FALLBACK_CATEGORY_ICON} {option.nome}
-              </option>
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => update({ categoriaEscolhida: option.nome })}
+                className={`flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  categoria === option.nome
+                    ? "border-accent bg-accent-soft text-accent-strong"
+                    : "border-border text-ink-muted hover:bg-bg"
+                }`}
+              >
+                <span aria-hidden>{option.icone ?? FALLBACK_CATEGORY_ICON}</span>
+                {option.nome}
+              </button>
             ))}
-          </select>
-        ) : (
-          <Link
-            href="/configuracoes"
-            onClick={onClose}
-            className="rounded-2xl border border-dashed border-border px-4 py-3 text-sm text-ink-muted hover:text-accent-strong"
-          >
-            Nenhuma categoria de {tipo} ainda — toque para criar uma
-          </Link>
-        )}
-
-        {banks.length > 0 && (
-          <select
-            value={bancoId}
-            onChange={(event) => changeBanco(event.target.value)}
-            className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
-          >
-            {!isEmprestimo && <option value="">Sem banco vinculado</option>}
-            {banks.map((banco) => (
-              <option key={banco.id} value={banco.id}>
-                {banco.nome}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {tipo === "despesa" && bancoId !== "" && !isEmprestimo && (
-          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => changeFormaPagamento("credito")}
-              className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition-colors ${
-                formaPagamento === "credito"
-                  ? "border-accent bg-accent-soft text-accent-strong"
-                  : "border-border text-ink-muted"
-              }`}
+              onClick={() => setCreatingCategory(true)}
+              className="flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:border-accent hover:text-accent-strong"
             >
-              Crédito
-            </button>
-            <button
-              type="button"
-              onClick={() => changeFormaPagamento("debito")}
-              className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition-colors ${
-                formaPagamento === "debito"
-                  ? "border-accent bg-accent-soft text-accent-strong"
-                  : "border-border text-ink-muted"
-              }`}
-            >
-              Débito
+              <Plus size={12} />
+              Nova
             </button>
           </div>
-        )}
+        </div>
 
         {podeParcelar && (
           <div className="rounded-2xl bg-bg px-4 py-3">
@@ -401,7 +453,7 @@ function TransactionFormFields({
               <input
                 type="checkbox"
                 checked={parcelar}
-                onChange={(event) => setParcelar(event.target.checked)}
+                onChange={(event) => update({ parcelar: event.target.checked })}
                 className="size-4 accent-accent"
               />
               Parcelar essa compra
@@ -415,8 +467,8 @@ function TransactionFormFields({
                       type="number"
                       min="2"
                       max="24"
-                      value={numParcelas}
-                      onChange={(event) => setNumParcelas(event.target.value)}
+                      value={form.numParcelas}
+                      onChange={(event) => update({ numParcelas: event.target.value })}
                       className="w-16 rounded-xl border border-border bg-surface px-2 py-1.5 text-sm outline-none transition-colors focus:border-accent"
                     />
                     vezes
@@ -427,8 +479,8 @@ function TransactionFormFields({
                       type="number"
                       min="1"
                       max={parcelasCount}
-                      value={parcelaInicial}
-                      onChange={(event) => setParcelaInicial(event.target.value)}
+                      value={form.parcelaInicial}
+                      onChange={(event) => update({ parcelaInicial: event.target.value })}
                       className="w-14 rounded-xl border border-border bg-surface px-2 py-1.5 text-sm outline-none transition-colors focus:border-accent"
                     />
                   </label>
@@ -446,8 +498,8 @@ function TransactionFormFields({
           <div className="rounded-2xl bg-bg px-4 py-3">
             <p className="text-xs text-ink-muted">Valor total a pagar (com juros, se houver)</p>
             <CurrencyInput
-              value={valorTotalPagar}
-              onChange={setValorTotalPagar}
+              value={form.valorTotalPagar}
+              onChange={(next) => update({ valorTotalPagar: next })}
               className="mt-2 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none transition-colors focus:border-accent"
             />
             <label className="mt-3 flex items-center gap-2 text-xs text-ink-muted">
@@ -456,34 +508,34 @@ function TransactionFormFields({
                 type="number"
                 min="1"
                 max="120"
-                value={numParcelasEmprestimo}
-                onChange={(event) => setNumParcelasEmprestimo(event.target.value)}
+                value={form.numParcelasEmprestimo}
+                onChange={(event) => update({ numParcelasEmprestimo: event.target.value })}
                 className="w-16 rounded-xl border border-border bg-surface px-2 py-1.5 text-sm outline-none transition-colors focus:border-accent"
               />
-              vezes, no débito
+              parcelas mensais
             </label>
             <p className="mt-3 text-xs text-ink-muted">Data da 1ª parcela</p>
             <input
               type="date"
-              value={dataPrimeiraParcela}
-              onChange={(event) => setDataPrimeiraParcela(event.target.value)}
+              value={form.dataPrimeiraParcela}
+              onChange={(event) => update({ dataPrimeiraParcela: event.target.value })}
               className="mt-2 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none transition-colors focus:border-accent"
             />
             <span className="mt-2 block text-xs text-ink-muted">
               {parcelasCountEmprestimo}x de{" "}
-              {formatCurrency((valorTotalPagar || 0) / parcelasCountEmprestimo)} — cada parcela só sai
-              da conta no próprio dia, a partir da data acima
+              {formatCurrency((form.valorTotalPagar || 0) / parcelasCountEmprestimo)} — uma por mês, a
+              partir da data acima
             </span>
           </div>
         )}
 
         {isEmprestimo && (
-          <p className="-mb-1 text-xs text-ink-muted">Data em que o dinheiro cai na conta</p>
+          <p className="-mb-1 text-xs text-ink-muted">Data em que você recebeu o dinheiro</p>
         )}
         <input
           type="date"
           value={data}
-          onChange={(event) => setData(event.target.value)}
+          onChange={(event) => update({ data: event.target.value })}
           className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition-colors focus:border-accent"
         />
 
@@ -519,7 +571,7 @@ function TransactionFormFields({
               <input
                 type="checkbox"
                 checked={recorrente}
-                onChange={(event) => setRecorrente(event.target.checked)}
+                onChange={(event) => update({ recorrente: event.target.checked })}
                 className="size-4 accent-accent"
               />
               Repetir
@@ -529,7 +581,7 @@ function TransactionFormFields({
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setRecorrenciaIntervalo("mensal")}
+                    onClick={() => update({ recorrenciaIntervalo: "mensal" })}
                     className={`rounded-2xl border px-3 py-2 text-xs font-medium transition-colors ${
                       recorrenciaIntervalo === "mensal"
                         ? "border-accent bg-accent-soft text-accent-strong"
@@ -540,7 +592,7 @@ function TransactionFormFields({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setRecorrenciaIntervalo("anual")}
+                    onClick={() => update({ recorrenciaIntervalo: "anual" })}
                     className={`rounded-2xl border px-3 py-2 text-xs font-medium transition-colors ${
                       recorrenciaIntervalo === "anual"
                         ? "border-accent bg-accent-soft text-accent-strong"
@@ -555,7 +607,7 @@ function TransactionFormFields({
                   <input
                     type="month"
                     value={recorrenteFim}
-                    onChange={(event) => setRecorrenteFim(event.target.value)}
+                    onChange={(event) => update({ recorrenteFim: event.target.value })}
                     className="rounded-xl border border-border px-2 py-1.5 text-sm outline-none transition-colors focus:border-accent"
                   />
                 </label>
@@ -566,10 +618,10 @@ function TransactionFormFields({
 
         {isRecurringTemplate && (
           <p className="rounded-2xl bg-bg px-4 py-3 text-xs text-ink-muted">
-            Isso é o início de uma assinatura — mudar valor, categoria ou banco aqui também muda
-            as próximas cobranças ainda não geradas (elas copiam esses dados na hora de gerar). Se
-            quiser corrigir só este mês sem afetar os próximos, use &ldquo;Ajustar&rdquo; na aba
-            Assinaturas em Configurações.
+            Isso é o início de uma assinatura — mudar valor ou categoria aqui também muda as
+            próximas cobranças ainda não geradas (elas copiam esses dados na hora de gerar). Se
+            quiser corrigir só este mês sem afetar os próximos, use &ldquo;Ajustar&rdquo; na tela
+            de Assinaturas.
           </p>
         )}
 
@@ -581,6 +633,15 @@ function TransactionFormFields({
           {isEditing ? "Salvar alterações" : "Salvar"}
         </button>
       </form>
+
+      <CategoryCreateSheet
+        open={creatingCategory}
+        onClose={() => setCreatingCategory(false)}
+        categories={categories}
+        onCreate={addCategory}
+        tipo={tipo}
+        onCreated={(nome) => update({ categoriaEscolhida: nome })}
+      />
 
       <ConfirmDialog
         open={confirmingCancelParcelas}
