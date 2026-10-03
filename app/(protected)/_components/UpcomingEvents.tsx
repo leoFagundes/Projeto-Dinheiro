@@ -2,7 +2,7 @@ import Link from "next/link";
 import { CalendarClock, Repeat } from "lucide-react";
 import { EmptyState } from "@/app/_components/EmptyState";
 import { Money } from "@/app/_components/Money";
-import { categoryKey, FALLBACK_CATEGORY_COLOR, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
+import { categoryKey, categoryTint, FALLBACK_CATEGORY_COLOR, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { formatDate } from "@/lib/format";
 import type { CalendarEvent } from "@/lib/derived";
 
@@ -41,7 +41,7 @@ export function UpcomingEvents({
               <span className="flex min-w-0 items-center gap-3">
                 <span
                   className="flex size-9 shrink-0 items-center justify-center rounded-full text-base"
-                  style={{ backgroundColor: `${categoriaColor}22` }}
+                  style={{ backgroundColor: categoryTint(categoriaColor) }}
                 >
                   {categoriaIcon}
                 </span>

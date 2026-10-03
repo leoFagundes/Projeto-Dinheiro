@@ -204,7 +204,7 @@ export default function CaixinhasPage() {
       <ConfirmDialog
         open={removing !== null}
         title="Remover caixinha?"
-        description={`"${removing?.nome}" será removida, junto com o valor guardado nela.`}
+        description={`"${removing?.nome}" será removida, junto com o valor guardado e todo o histórico dela.`}
         confirmLabel="Remover"
         danger
         onConfirm={async () => {

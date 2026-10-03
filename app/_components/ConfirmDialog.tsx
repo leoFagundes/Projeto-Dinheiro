@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { toast } from "sonner";
 import { useDismissable } from "@/lib/use-dismissable";
 
 export function ConfirmDialog({
@@ -17,10 +19,28 @@ export function ConfirmDialog({
   description: string;
   confirmLabel?: string;
   danger?: boolean;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   onCancel: () => void;
 }) {
   useDismissable(open, onCancel);
+  const [busy, setBusy] = useState(false);
+
+  // Trava os botões enquanto a ação roda (sem isso, dois toques rápidos
+  // disparavam a ação duas vezes) e, se ela falhar sem tratar o erro por
+  // conta própria, avisa — antes uma falha aqui passava em silêncio, e o
+  // usuário ficava sem saber se tinha excluído ou não.
+  async function handleConfirm() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await onConfirm();
+    } catch (error) {
+      console.error(error);
+      toast.error("Não foi possível concluir. Tente de novo.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <AnimatePresence>
@@ -31,11 +51,11 @@ export function ConfirmDialog({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          onClick={onCancel}
+          onClick={busy ? undefined : onCancel}
         >
           <motion.div
             onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-sm rounded-card bg-surface shadow-card p-6 shadow-xl"
+            className="w-full max-w-sm rounded-card bg-surface p-6 shadow-xl"
             initial={{ opacity: 0, scale: 0.94 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.94 }}
@@ -46,16 +66,16 @@ export function ConfirmDialog({
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={onCancel}
-                className="rounded-xl px-4 py-2 text-sm text-ink-muted transition-transform active:scale-95 hover:bg-bg"
+                disabled={busy}
+                className="rounded-xl px-4 py-2 text-sm text-ink-muted transition-transform active:scale-95 hover:bg-bg disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
-                onClick={onConfirm}
-                className={`rounded-xl px-4 py-2 text-sm font-medium text-white transition-transform active:scale-95 ${
-                  danger
-                    ? "bg-negative hover:opacity-90"
-                    : "bg-accent hover:bg-accent-strong"
+                onClick={handleConfirm}
+                disabled={busy}
+                className={`rounded-xl px-4 py-2 text-sm font-medium text-white transition-transform active:scale-95 disabled:opacity-60 ${
+                  danger ? "bg-negative hover:opacity-90" : "bg-accent hover:bg-accent-strong"
                 }`}
               >
                 {confirmLabel}

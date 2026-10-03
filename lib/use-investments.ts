@@ -4,18 +4,20 @@ import { useCallback, useEffect, useState } from "react";
 import {
   addDoc,
   collection,
-  deleteDoc,
   deleteField,
   doc,
+  getDocs,
   increment,
   onSnapshot,
   query,
   runTransaction,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./auth-context";
+import { batchBuilder, commitInBackground } from "./firestore-writes";
 import { todayIsoDate } from "./format";
 import type { Investment, InvestmentMovement, InvestmentSubtipo, InvestmentType } from "./types";
 
@@ -87,9 +89,24 @@ export function useInvestments() {
     [],
   );
 
-  const removeInvestment = useCallback(async (id: string) => {
-    await deleteDoc(doc(db, COLLECTION, id));
-  }, []);
+  /**
+   * Remove o investimento junto com todo o histórico dele (aportes, resgates,
+   * rendimentos), num batch atômico. Antes os movimentos ficavam órfãos e
+   * continuavam somando nos gráficos de aportes e no Histórico.
+   */
+  const removeInvestment = useCallback(
+    async (id: string) => {
+      if (!user) return;
+      const movimentos = await getDocs(
+        query(collection(db, MOVEMENTS_COLLECTION), where("userId", "==", user.uid), where("investimentoId", "==", id)),
+      );
+      const exclusao = batchBuilder();
+      exclusao.next().delete(doc(db, COLLECTION, id));
+      for (const snap of movimentos.docs) exclusao.next().delete(snap.ref);
+      commitInBackground(exclusao.batches, "Não foi possível remover o investimento. Tente de novo.");
+    },
+    [user],
+  );
 
   const setInvestmentOculto = useCallback(async (id: string, oculto: boolean) => {
     await updateDoc(doc(db, COLLECTION, id), oculto ? { oculto: true } : { oculto: deleteField() });
@@ -182,29 +199,38 @@ export function useInvestments() {
   /**
    * Exclui um movimento (aporte/resgate/rendimento) desfazendo exatamente o
    * que ele alterou no investimento — sem isso, um lançamento errado nunca
-   * podia ser corrigido, só compensado com outro movimento manual.
+   * podia ser corrigido, só compensado com outro movimento manual. Em batch
+   * (não runTransaction): não precisa ler nada antes, e transação do
+   * Firestore só funciona online — com internet ruim a exclusão falhava. Se
+   * o investimento já não existe, só apaga o registro.
    */
-  const deleteInvestmentMovement = useCallback(async (movement: InvestmentMovement) => {
-    await runTransaction(db, async (transaction) => {
+  const deleteInvestmentMovement = useCallback(
+    async (movement: InvestmentMovement) => {
+      // Sem a lista carregada não dá pra saber se o investimento existe —
+      // melhor recusar do que apagar o registro sem desfazer o saldo.
+      if (loading) throw new Error("Investimentos ainda carregando.");
+      const batch = writeBatch(db);
       const investRef = doc(db, COLLECTION, movement.investimentoId);
-      if (movement.tipo === "rendimento") {
-        transaction.update(investRef, { saldoAtual: increment(-movement.valor) });
-      } else {
-        const custoDelta =
-          movement.custoDelta ?? (movement.tipo === "aporte" ? movement.valor : -movement.valor);
-        transaction.update(investRef, {
-          valorInvestido: increment(-custoDelta),
-          ...(movement.cotas
-            ? { totalCotas: increment(movement.tipo === "aporte" ? -movement.cotas : movement.cotas) }
-            : {}),
-          ...(movement.saldoDelta !== undefined
-            ? { saldoAtual: increment(-movement.saldoDelta) }
-            : {}),
-        });
+      if (investments.some((i) => i.id === movement.investimentoId)) {
+        if (movement.tipo === "rendimento") {
+          batch.update(investRef, { saldoAtual: increment(-movement.valor) });
+        } else {
+          const custoDelta =
+            movement.custoDelta ?? (movement.tipo === "aporte" ? movement.valor : -movement.valor);
+          batch.update(investRef, {
+            valorInvestido: increment(-custoDelta),
+            ...(movement.cotas
+              ? { totalCotas: increment(movement.tipo === "aporte" ? -movement.cotas : movement.cotas) }
+              : {}),
+            ...(movement.saldoDelta !== undefined ? { saldoAtual: increment(-movement.saldoDelta) } : {}),
+          });
+        }
       }
-      transaction.delete(doc(db, MOVEMENTS_COLLECTION, movement.id));
-    });
-  }, []);
+      batch.delete(doc(db, MOVEMENTS_COLLECTION, movement.id));
+      commitInBackground([batch], "Não foi possível excluir o movimento. Tente de novo.");
+    },
+    [investments, loading],
+  );
 
   return {
     investments,

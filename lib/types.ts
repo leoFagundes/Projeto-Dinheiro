@@ -16,6 +16,13 @@ export type Transaction = {
   recorrenteFim?: string;
   /** Frequência da recorrência. Ausente = "mensal" (padrão histórico). */
   recorrenciaIntervalo?: "mensal" | "anual";
+  /**
+   * Só no template de uma recorrência: meses (yyyy-MM) cuja cobrança gerada
+   * foi excluída de propósito — o gerador automático não recria esses meses,
+   * e eles também não aparecem como "previsto". Sem isso, excluir a cobrança
+   * do mês fazia ela voltar na próxima vez que o app abria.
+   */
+  mesesExcluidos?: string[];
   /** Agrupa todas as parcelas de uma mesma compra parcelada (ou empréstimo, ver `emprestimoId`) */
   compraId?: string;
   parcelaAtual?: number;

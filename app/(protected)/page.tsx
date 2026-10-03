@@ -8,7 +8,6 @@ import { useAccountPreferences } from "@/lib/use-account-preferences";
 import { assignCategoryColors, mapCategoryIcons } from "@/lib/categories";
 import {
   computeLoans,
-  computeMonthlyFlowTrend,
   computeMonthProgress,
   computeOriginDateById,
   computeUpcomingEvents,
@@ -24,7 +23,7 @@ import { LoansSection } from "./_components/LoansSection";
 import { CategoryGoals } from "./_components/CategoryGoals";
 
 export default function DashboardPage() {
-  const { transactions, loading, deleteTransaction, payLoanInstallment, undoLoanInstallmentPayment } =
+  const { transactions, loading, payLoanInstallment, undoLoanInstallmentPayment } =
     useTransactions();
   const { goals, overrides: goalOverrides, setGoal, removeGoal, setGoalOverride, removeGoalOverride } =
     useCategoryGoals();
@@ -67,7 +66,6 @@ export default function DashboardPage() {
   const thisMonth = currentMonthKey();
   const progresso = computeMonthProgress(transactions, thisMonth);
   const upcomingEvents = computeUpcomingEvents(transactions, 7);
-  const monthlyFlow = computeMonthlyFlowTrend(transactions, 6);
   const colorByCategoria = assignCategoryColors(categories);
   const iconByCategoria = mapCategoryIcons(categories);
   const categoriaNomes = new Set(categories.filter((c) => c.tipo === "despesa").map((c) => c.nome));
@@ -90,7 +88,6 @@ export default function DashboardPage() {
         <ActivitySection
           upcomingEvents={upcomingEvents}
           transactions={transactions}
-          onDeleteTransaction={deleteTransaction}
           colorByCategoria={colorByCategoria}
           iconByCategoria={iconByCategoria}
           originDateById={originDateById}
@@ -108,7 +105,7 @@ export default function DashboardPage() {
             transactions={transactions}
             colorByCategoria={colorByCategoria}
             iconByCategoria={iconByCategoria}
-            monthlyFlow={monthlyFlow}
+            originDateById={originDateById}
           />
         </section>
 
@@ -118,7 +115,9 @@ export default function DashboardPage() {
             goals={goalsValidos}
             overrides={goalOverridesValidos}
             transactions={transactions}
+            colorByCategoria={colorByCategoria}
             iconByCategoria={iconByCategoria}
+            originDateById={originDateById}
             onSetGoal={setGoal}
             onRemoveGoal={removeGoal}
             onSetGoalOverride={setGoalOverride}

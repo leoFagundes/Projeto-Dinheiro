@@ -1,18 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  query,
-  updateDoc,
-  where,
-} from "firebase/firestore";
+import { addDoc, collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./auth-context";
+import { batchBuilder, commitInBackground } from "./firestore-writes";
 import type { CategoryGoal, CategoryGoalOverride } from "./types";
 
 const COLLECTION = "categoryGoals";
@@ -72,9 +64,24 @@ export function useCategoryGoals() {
     [user, goals],
   );
 
-  const removeGoal = useCallback(async (id: string) => {
-    await deleteDoc(doc(db, COLLECTION, id));
-  }, []);
+  /**
+   * Tira o limite de uma categoria: apaga TODOS os registros de limite dela
+   * (se por algum motivo existir mais de um, apagar só o primeiro deixava o
+   * limite "voltando") e as personalizações por mês, num batch só.
+   */
+  const removeGoal = useCallback(
+    async (categoria: string) => {
+      const exclusao = batchBuilder();
+      for (const g of goals.filter((g) => g.categoria === categoria)) {
+        exclusao.next().delete(doc(db, COLLECTION, g.id));
+      }
+      for (const o of overrides.filter((o) => o.categoria === categoria)) {
+        exclusao.next().delete(doc(db, OVERRIDES_COLLECTION, o.id));
+      }
+      commitInBackground(exclusao.batches, "Não foi possível remover o limite. Tente de novo.");
+    },
+    [goals, overrides],
+  );
 
   /** Mantém o limite de gastos acompanhando a categoria quando ela é renomeada. */
   const renameGoalCategoria = useCallback(
@@ -113,9 +120,17 @@ export function useCategoryGoals() {
     [user, overrides],
   );
 
-  const removeGoalOverride = useCallback(async (id: string) => {
-    await deleteDoc(doc(db, OVERRIDES_COLLECTION, id));
-  }, []);
+  /** Volta um mês ao limite geral — apaga todas as personalizações daquela categoria naquele mês. */
+  const removeGoalOverride = useCallback(
+    async (categoria: string, monthKey: string) => {
+      const exclusao = batchBuilder();
+      for (const o of overrides.filter((o) => o.categoria === categoria && o.monthKey === monthKey)) {
+        exclusao.next().delete(doc(db, OVERRIDES_COLLECTION, o.id));
+      }
+      commitInBackground(exclusao.batches, "Não foi possível remover a personalização. Tente de novo.");
+    },
+    [overrides],
+  );
 
   return {
     goals,

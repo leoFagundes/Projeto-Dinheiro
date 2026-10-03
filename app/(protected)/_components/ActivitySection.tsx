@@ -14,14 +14,12 @@ type Tab = "proximos" | "recentes";
 export function ActivitySection({
   upcomingEvents,
   transactions,
-  onDeleteTransaction,
   colorByCategoria,
   iconByCategoria,
   originDateById,
 }: {
   upcomingEvents: CalendarEvent[];
   transactions: Transaction[];
-  onDeleteTransaction: (id: string) => Promise<void>;
   colorByCategoria: Map<string, string>;
   iconByCategoria: Map<string, string>;
   originDateById?: Map<string, string>;
@@ -80,7 +78,6 @@ export function ActivitySection({
       ) : (
         <RecentTransactions
           transactions={transactions}
-          onDelete={onDeleteTransaction}
           colorByCategoria={colorByCategoria}
           iconByCategoria={iconByCategoria}
           originDateById={originDateById}

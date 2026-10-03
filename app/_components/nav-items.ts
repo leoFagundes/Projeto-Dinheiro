@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   CalendarClock,
   Gamepad2,
   History,
@@ -15,6 +16,7 @@ export type NavItem = { href: string; label: string; icon: LucideIcon };
 /** Lista de destinos usada tanto no menu lateral (mobile, via vaul) quanto na sidebar fixa (telas largas). */
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/analises", label: "Análises", icon: BarChart3 },
   { href: "/historico", label: "Histórico", icon: History },
   { href: "/investimentos", label: "Investir", icon: TrendingUp },
   { href: "/caixinhas", label: "Caixinhas", icon: PiggyBank },

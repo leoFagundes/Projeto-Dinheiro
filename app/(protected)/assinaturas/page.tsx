@@ -41,7 +41,7 @@ type AjusteAssinatura = {
 };
 
 export default function AssinaturasPage() {
-  const { transactions, addTransaction, updateTransaction, deleteTransaction } = useTransactions();
+  const { transactions, addTransaction, updateTransaction, deleteTransactions } = useTransactions();
   const { categories } = useCategories();
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [stopping, setStopping] = useState<Transaction | null>(null);
@@ -81,15 +81,11 @@ export default function AssinaturasPage() {
     }
   }
 
-  async function handleRemove() {
+  function handleRemove() {
     if (!removing) return;
-    try {
-      await deleteTransaction(removing.id);
-      toast.success("Assinatura excluída.");
-      setRemoving(null);
-    } catch {
-      toast.error("Não foi possível excluir essa assinatura.");
-    }
+    const desfazer = deleteTransactions([removing]);
+    toast.success("Assinatura excluída.", { duration: 7000, action: { label: "Desfazer", onClick: desfazer } });
+    setRemoving(null);
   }
 
   async function handleAdjust(params: AjusteAssinatura) {

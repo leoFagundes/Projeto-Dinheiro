@@ -20,7 +20,7 @@ const ICON_BY_TIPO = {
 } as const;
 
 /** Linha pras movimentações que não são transações — só dá pra excluir (desfaz o efeito nos saldos), não editar. */
-export function HistoryEntryRow({ entry }: { entry: HistoryEntry }) {
+export function HistoryEntryRow({ entry, hideDate = false }: { entry: HistoryEntry; hideDate?: boolean }) {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const Icon = ICON_BY_TIPO[entry.tipo as keyof typeof ICON_BY_TIPO] ?? ArrowLeftRight;
@@ -57,10 +57,11 @@ export function HistoryEntryRow({ entry }: { entry: HistoryEntry }) {
             </span>
             <span className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{entry.titulo}</p>
-              <p className="flex flex-wrap items-center gap-1 text-xs text-ink-muted">
-                {formatDate(entry.data)}
-                {entry.detalhe ? ` · ${entry.detalhe}` : ""}
-              </p>
+              {(!hideDate || entry.detalhe) && (
+                <p className="text-xs text-ink-muted">
+                  {[hideDate ? null : formatDate(entry.data), entry.detalhe].filter(Boolean).join(" · ")}
+                </p>
+              )}
             </span>
           </span>
           <div className="flex shrink-0 items-center gap-3">

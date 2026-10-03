@@ -164,11 +164,12 @@ function TransactionFormFields({
 }) {
   const { user } = useAuth();
   const {
+    transactions,
     addTransaction,
     addInstallmentPurchase,
     addLoan,
     updateTransaction,
-    cancelRemainingInstallments,
+    deleteTransactions,
   } = useTransactions();
   const { categories, byType: categoriesByType, addCategory } = useCategories();
   const { seen: seenEmprestimo, markSeen: markEmprestimoSeen } = useSeenFeature("aba-emprestimo");
@@ -321,16 +322,18 @@ function TransactionFormFields({
     }
   }
 
-  async function handleCancelRemaining() {
+  function handleCancelRemaining() {
     if (!transaction?.compraId || !transaction.parcelaAtual) return;
-    try {
-      await cancelRemainingInstallments(transaction.compraId, transaction.parcelaAtual);
-      toast.success("Parcelas restantes canceladas.");
-      setConfirmingCancelParcelas(false);
-      onClose();
-    } catch {
-      toast.error("Não foi possível cancelar as parcelas.");
-    }
+    const restantes = transactions.filter(
+      (t) => t.compraId === transaction.compraId && (t.parcelaAtual ?? 0) >= (transaction.parcelaAtual ?? 0),
+    );
+    const desfazer = deleteTransactions(restantes);
+    toast.success(`${restantes.length} ${restantes.length === 1 ? "parcela cancelada" : "parcelas canceladas"}.`, {
+      duration: 7000,
+      action: { label: "Desfazer", onClick: desfazer },
+    });
+    setConfirmingCancelParcelas(false);
+    onClose();
   }
 
   return (

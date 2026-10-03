@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { addDoc, collection, deleteDoc, doc, onSnapshot, query, where } from "firebase/firestore";
+import { addDoc, collection, doc, onSnapshot, query, where, writeBatch } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./auth-context";
+import { commitInBackground } from "./firestore-writes";
 import type { InvestmentGoal } from "./types";
 
 const COLLECTION = "investmentGoals";
@@ -45,7 +46,9 @@ export function useInvestmentGoals() {
   );
 
   const removeGoal = useCallback(async (id: string) => {
-    await deleteDoc(doc(db, COLLECTION, id));
+    const batch = writeBatch(db);
+    batch.delete(doc(db, COLLECTION, id));
+    commitInBackground([batch], "Não foi possível remover a meta. Tente de novo.");
   }, []);
 
   return { goals, loading, addGoal, removeGoal };

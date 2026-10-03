@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Eye, EyeOff, HelpCircle, Menu } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { VisibilityProvider, useValuesVisibility } from "@/lib/visibility-context";
+import { TransactionsProvider } from "@/lib/use-transactions";
 import { isAppLockEnabled } from "@/lib/app-lock";
 import { NavDrawer } from "@/app/_components/NavDrawer";
 import { Sidebar } from "@/app/_components/Sidebar";
@@ -59,63 +60,66 @@ export default function ProtectedLayout({
 
   return (
     <VisibilityProvider>
-      <div className="flex min-h-screen">
-        <Sidebar />
+      <TransactionsProvider>
+        <div className="flex min-h-screen">
+          <Sidebar />
 
-        <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-          <header
-            className="sticky top-0 z-20 flex justify-center border-b border-border bg-surface/95 backdrop-blur"
-            style={{ paddingTop: "env(safe-area-inset-top)" }}
-          >
-            <div className="flex w-full max-w-md items-center justify-between px-5 py-4 md:max-w-2xl">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setDrawerOpen(true)}
-                  aria-label="Abrir menu"
-                  className="text-ink-muted transition-transform active:scale-90 hover:text-ink md:hidden"
+          <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+            <header
+              className="sticky top-0 z-20 flex justify-center border-b border-border bg-surface/95 backdrop-blur"
+              style={{ paddingTop: "env(safe-area-inset-top)" }}
+            >
+              <div className="flex w-full max-w-md items-center justify-between px-5 py-4 md:max-w-2xl">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setDrawerOpen(true)}
+                    aria-label="Abrir menu"
+                    className="text-ink-muted transition-transform active:scale-90 hover:text-ink md:hidden"
+                  >
+                    <Menu size={20} />
+                  </button>
+                  <Link href="/" className="flex items-center gap-2 md:hidden">
+                    <Image
+                      src="/logo.svg"
+                      alt=""
+                      width={28}
+                      height={28}
+                      className="rounded-lg shadow-sm ring-1 ring-black/5"
+                      unoptimized
+                    />
+                    <span>
+                      <p className="font-semibold leading-tight">Projeto Dinheiro</p>
+                      {nickname && <p className="text-xs leading-tight text-ink-muted">{nickname}</p>}
+                    </span>
+                  </Link>
+                  {nickname && <p className="hidden text-sm text-ink-muted md:block">Olá, {nickname}</p>}
+                </div>
+                <div className="flex items-center gap-3">
+                  <VisibilityToggleButton />
+                  <HelpButton />
+                </div>
+              </div>
+            </header>
+
+            {/* pb-24: espaço pro botão "+" flutuante nunca cobrir o último item da página. */}
+            <main className="mx-auto w-full min-w-0 max-w-md flex-1 px-5 pt-6 pb-24 md:max-w-2xl">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={pathname}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="min-w-0"
                 >
-                  <Menu size={20} />
-                </button>
-                <Link href="/" className="flex items-center gap-2 md:hidden">
-                  <Image
-                    src="/logo.svg"
-                    alt=""
-                    width={28}
-                    height={28}
-                    className="rounded-lg shadow-sm ring-1 ring-black/5"
-                    unoptimized
-                  />
-                  <span>
-                    <p className="font-semibold leading-tight">Projeto Dinheiro</p>
-                    {nickname && <p className="text-xs leading-tight text-ink-muted">{nickname}</p>}
-                  </span>
-                </Link>
-                {nickname && <p className="hidden text-sm text-ink-muted md:block">Olá, {nickname}</p>}
-              </div>
-              <div className="flex items-center gap-3">
-                <VisibilityToggleButton />
-                <HelpButton />
-              </div>
-            </div>
-          </header>
+                  {children}
+                </motion.div>
+              </AnimatePresence>
+            </main>
 
-          <main className="mx-auto w-full min-w-0 max-w-md flex-1 px-5 py-6 md:max-w-2xl">
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={pathname}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="min-w-0"
-              >
-                {children}
-              </motion.div>
-            </AnimatePresence>
-          </main>
-
-          <AddTransactionButton />
-          <NavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+            <AddTransactionButton />
+            <NavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+          </div>
         </div>
-      </div>
+      </TransactionsProvider>
     </VisibilityProvider>
   );
 }

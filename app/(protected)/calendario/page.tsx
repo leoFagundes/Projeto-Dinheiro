@@ -8,7 +8,7 @@ import { CalendarClock, Repeat } from "lucide-react";
 import { useTransactions } from "@/lib/use-transactions";
 import { useCategories } from "@/lib/use-categories";
 import { assignCategoryColors, categoryKey, mapCategoryIcons } from "@/lib/categories";
-import { FALLBACK_CATEGORY_COLOR, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
+import { categoryTint, FALLBACK_CATEGORY_COLOR, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { computeMonthEvents, type CalendarEvent } from "@/lib/derived";
 import { monthKeyOf } from "@/lib/format";
 import { PageFade } from "@/app/_components/PageFade";
@@ -206,7 +206,7 @@ function EventRow({
       <span className="flex min-w-0 items-center gap-2.5">
         <span
           className="flex size-8 shrink-0 items-center justify-center rounded-full text-sm"
-          style={{ backgroundColor: `${categoriaColor}22` }}
+          style={{ backgroundColor: categoryTint(categoriaColor) }}
         >
           {categoriaIcon}
         </span>

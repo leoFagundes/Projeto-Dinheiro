@@ -25,7 +25,7 @@ const TABS: HelpTab[] = [
       {
         titulo: "Menu e sidebar",
         texto:
-          "No celular, toque no ícone de menu (☰) no topo pra abrir a navegação lateral. Em telas largas, ela já fica fixa na esquerda. As abas são: Dashboard, Histórico, Investir, Caixinhas, Agenda, Assinaturas e Ajustes. Tocar na logo/nome do app sempre leva pro Dashboard.",
+          "No celular, toque no ícone de menu (☰) no topo pra abrir a navegação lateral. Em telas largas, ela já fica fixa na esquerda. As abas são: Dashboard, Análises, Histórico, Investir, Caixinhas, Agenda, Assinaturas e Ajustes. Tocar na logo/nome do app sempre leva pro Dashboard.",
       },
       {
         titulo: "Tema claro e escuro",
@@ -56,7 +56,28 @@ const TABS: HelpTab[] = [
       {
         titulo: "Análises e limites por categoria",
         texto:
-          "Mais embaixo ficam os gráficos de gastos por categoria e de receitas x despesas mês a mês, e a seção de limites mensais por categoria (definidos em Ajustes → Categorias, junto com uma meta), mostrando quanto já foi usado de cada um.",
+          'Mais embaixo ficam os gastos do mês por categoria e a seção de limites mensais, mostrando quanto já foi usado e quanto ainda resta de cada um — a barra fica amarela quando passa de 85% ("perto do limite") e vermelha quando estoura. Toque numa categoria (no gráfico ou num limite) pra ver todas as transações dela no mês e editar ou excluir qualquer uma ali mesmo.',
+      },
+    ],
+  },
+  {
+    id: "analises",
+    label: "Análises",
+    sections: [
+      {
+        titulo: "Semana, mês ou ano",
+        texto:
+          'Na aba Análises, escolha Semana, Mês ou Ano no topo e use as setas pra navegar entre períodos ("voltar para este mês" leva de volta pro atual). Tudo na tela segue o período escolhido.',
+      },
+      {
+        titulo: "O que cada gráfico mostra",
+        texto:
+          'Os cards do topo mostram quanto entrou, quanto saiu, o saldo e o gasto médio por dia, com a comparação contra o mesmo ponto do período anterior. "Ritmo de gastos" compara o acumulado do período com o anterior, pra ver se você está gastando mais rápido. Depois vêm os gastos por dia (ou por mês, no ano), receitas x despesas dos últimos períodos e os maiores gastos.',
+      },
+      {
+        titulo: "Detalhe de uma categoria",
+        texto:
+          "Toque em qualquer categoria (na lista ou na fatia do gráfico) pra abrir o detalhe: total no período, comparação com o anterior, os últimos períodos num gráfico e todas as transações dela — dá pra editar ou excluir direto por lá.",
       },
     ],
   },
@@ -152,7 +173,7 @@ const TABS: HelpTab[] = [
       {
         titulo: "Filtrando e buscando",
         texto:
-          "Use os chips pra filtrar por tipo (receita, despesa, caixinha, investimento...) e o seletor de categoria pra refinar ainda mais. A busca ignora o mês selecionado e procura em tudo.",
+          "A lista vem agrupada por dia, com o saldo de cada dia. Use os chips pra filtrar por tipo (receita, despesa, caixinha, investimento...) e o seletor de categoria pra refinar ainda mais. A busca ignora o mês selecionado e procura em tudo.",
       },
       {
         titulo: "Agenda",

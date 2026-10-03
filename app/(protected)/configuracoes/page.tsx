@@ -53,7 +53,7 @@ import {
   RowActionButtons,
   ToggleSwitch,
 } from "@/app/_components/SettingsFormKit";
-import type { Category, FeedbackTipo } from "@/lib/types";
+import type { Category, FeedbackTipo, TransactionType } from "@/lib/types";
 
 export default function ConfiguracoesPage() {
   return (
@@ -77,9 +77,8 @@ export default function ConfiguracoesPage() {
 
 function CategoriasSection() {
   const { categories, addCategory, removeCategory, updateCategory } = useCategories();
-  const { goals, overrides, removeGoal, removeGoalOverride, renameGoalCategoria } =
-    useCategoryGoals();
-  const [removing, setRemoving] = useState<{ id: string; nome: string } | null>(null);
+  const { removeGoal, renameGoalCategoria } = useCategoryGoals();
+  const [removing, setRemoving] = useState<{ id: string; nome: string; tipo: TransactionType } | null>(null);
   const [editing, setEditing] = useState<Category | null>(null);
 
   async function handleUpdateCategory(id: string, input: { nome: string; icone: string }) {
@@ -124,7 +123,7 @@ function CategoriasSection() {
                 </span>
                 <RowActionButtons
                   onEdit={() => setEditing(c)}
-                  onRemove={() => setRemoving({ id: c.id, nome: c.nome })}
+                  onRemove={() => setRemoving({ id: c.id, nome: c.nome, tipo: c.tipo })}
                   editLabel="Editar categoria"
                   removeLabel="Remover categoria"
                 />
@@ -143,7 +142,7 @@ function CategoriasSection() {
                 </span>
                 <RowActionButtons
                   onEdit={() => setEditing(c)}
-                  onRemove={() => setRemoving({ id: c.id, nome: c.nome })}
+                  onRemove={() => setRemoving({ id: c.id, nome: c.nome, tipo: c.tipo })}
                   editLabel="Editar categoria"
                   removeLabel="Remover categoria"
                 />
@@ -162,11 +161,9 @@ function CategoriasSection() {
         onConfirm={async () => {
           if (!removing) return;
           await removeCategory(removing.id);
-          const orphanGoal = goals.find((g) => g.categoria === removing.nome);
-          if (orphanGoal) await removeGoal(orphanGoal.id);
-          await Promise.all(
-            overrides.filter((o) => o.categoria === removing.nome).map((o) => removeGoalOverride(o.id)),
-          );
+          // Limites só existem pra despesas — sem esse filtro, remover a
+          // categoria de RECEITA "Outros" apagava o limite da despesa "Outros".
+          if (removing.tipo === "despesa") await removeGoal(removing.nome);
           toast.success("Categoria removida.");
           setRemoving(null);
         }}

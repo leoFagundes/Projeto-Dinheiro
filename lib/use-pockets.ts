@@ -4,18 +4,20 @@ import { useCallback, useEffect, useState } from "react";
 import {
   addDoc,
   collection,
-  deleteDoc,
   deleteField,
   doc,
+  getDocs,
   increment,
   onSnapshot,
   query,
   runTransaction,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./auth-context";
+import { batchBuilder, commitInBackground } from "./firestore-writes";
 import { todayIsoDate } from "./format";
 import type { Pocket, PocketMovement, PocketTransfer } from "./types";
 
@@ -68,9 +70,30 @@ export function usePockets() {
     [],
   );
 
-  const removePocket = useCallback(async (id: string) => {
-    await deleteDoc(doc(db, COLLECTION, id));
-  }, []);
+  /**
+   * Remove a caixinha junto com TODO o histórico dela (depósitos, retiradas,
+   * rendimentos e transferências de/para ela), num batch atômico. Antes só o
+   * documento da caixinha sumia — os movimentos ficavam órfãos, ainda
+   * aparecendo no Histórico como "caixinha removida".
+   */
+  const removePocket = useCallback(
+    async (id: string) => {
+      if (!user) return;
+      const doUsuario = where("userId", "==", user.uid);
+      const [movimentos, enviadas, recebidas] = await Promise.all([
+        getDocs(query(collection(db, "pocketMovements"), doUsuario, where("pocketId", "==", id))),
+        getDocs(query(collection(db, "pocketTransfers"), doUsuario, where("fromPocketId", "==", id))),
+        getDocs(query(collection(db, "pocketTransfers"), doUsuario, where("toPocketId", "==", id))),
+      ]);
+      const exclusao = batchBuilder();
+      exclusao.next().delete(doc(db, COLLECTION, id));
+      for (const snap of [...movimentos.docs, ...enviadas.docs, ...recebidas.docs]) {
+        exclusao.next().delete(snap.ref);
+      }
+      commitInBackground(exclusao.batches, "Não foi possível remover a caixinha. Tente de novo.");
+    },
+    [user],
+  );
 
   const setPocketOculto = useCallback(async (id: string, oculto: boolean) => {
     await updateDoc(doc(db, COLLECTION, id), oculto ? { oculto: true } : { oculto: deleteField() });
@@ -106,18 +129,29 @@ export function usePockets() {
     [user],
   );
 
-  /** Desfaz uma transferência entre caixinhas, devolvendo o saldo pra origem. */
-  const deletePocketTransfer = useCallback(async (transfer: PocketTransfer) => {
-    await runTransaction(db, async (transaction) => {
-      transaction.update(doc(db, COLLECTION, transfer.fromPocketId), {
-        saldo: increment(transfer.valor),
-      });
-      transaction.update(doc(db, COLLECTION, transfer.toPocketId), {
-        saldo: increment(-transfer.valor),
-      });
-      transaction.delete(doc(db, "pocketTransfers", transfer.id));
-    });
-  }, []);
+  /**
+   * Desfaz uma transferência entre caixinhas, devolvendo o saldo pra origem.
+   * Batch (não runTransaction): não precisa ler nada antes — e transação do
+   * Firestore só funciona online, então com internet ruim a exclusão falhava.
+   * Se uma das caixinhas já não existe mais, só apaga o registro.
+   */
+  const deletePocketTransfer = useCallback(
+    async (transfer: PocketTransfer) => {
+      // Sem a lista carregada não dá pra saber se as caixinhas existem —
+      // melhor recusar do que apagar o registro sem desfazer os saldos.
+      if (loading) throw new Error("Caixinhas ainda carregando.");
+      const batch = writeBatch(db);
+      if (pockets.some((p) => p.id === transfer.fromPocketId)) {
+        batch.update(doc(db, COLLECTION, transfer.fromPocketId), { saldo: increment(transfer.valor) });
+      }
+      if (pockets.some((p) => p.id === transfer.toPocketId)) {
+        batch.update(doc(db, COLLECTION, transfer.toPocketId), { saldo: increment(-transfer.valor) });
+      }
+      batch.delete(doc(db, "pocketTransfers", transfer.id));
+      commitInBackground([batch], "Não foi possível excluir a transferência. Tente de novo.");
+    },
+    [pockets, loading],
+  );
 
   /** Deposita ou retira dinheiro de uma caixinha, registrando o movimento no histórico dela. */
   const moveFunds = useCallback(
@@ -173,14 +207,23 @@ export function usePockets() {
     [user],
   );
 
-  /** Exclui um movimento (depósito/retirada/rendimento), desfazendo o efeito no saldo da caixinha. */
-  const deletePocketMovement = useCallback(async (movement: PocketMovement) => {
-    const delta = movement.tipo === "retirada" ? movement.valor : -movement.valor;
-    await runTransaction(db, async (transaction) => {
-      transaction.update(doc(db, COLLECTION, movement.pocketId), { saldo: increment(delta) });
-      transaction.delete(doc(db, "pocketMovements", movement.id));
-    });
-  }, []);
+  /**
+   * Exclui um movimento (depósito/retirada/rendimento), desfazendo o efeito
+   * no saldo da caixinha — em batch, pelo mesmo motivo de deletePocketTransfer.
+   */
+  const deletePocketMovement = useCallback(
+    async (movement: PocketMovement) => {
+      if (loading) throw new Error("Caixinhas ainda carregando.");
+      const delta = movement.tipo === "retirada" ? movement.valor : -movement.valor;
+      const batch = writeBatch(db);
+      if (pockets.some((p) => p.id === movement.pocketId)) {
+        batch.update(doc(db, COLLECTION, movement.pocketId), { saldo: increment(delta) });
+      }
+      batch.delete(doc(db, "pocketMovements", movement.id));
+      commitInBackground([batch], "Não foi possível excluir o movimento. Tente de novo.");
+    },
+    [pockets, loading],
+  );
 
   return {
     pockets,

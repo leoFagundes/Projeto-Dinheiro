@@ -1,10 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
-import { CategoryPieChart, MonthlyFlowChart } from "./Charts";
+import { ArrowRight } from "lucide-react";
+import { CategoryPieChart, FlowTrendChart } from "./Charts";
+import { CategoryDetailSheet } from "./CategoryDetailSheet";
+import { TipoToggle } from "./TipoToggle";
 import { MonthFilter } from "@/app/_components/MonthFilter";
 import { computeCategoryBreakdown } from "@/lib/derived";
+import { computeFlowTrend } from "@/lib/analytics";
+import { periodContaining } from "@/lib/periods";
 import { addMonthsToKey, currentMonthKey } from "@/lib/format";
 import type { Transaction, TransactionType } from "@/lib/types";
 
@@ -15,24 +21,26 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "evolucao", label: "Evolução" },
 ];
 
+/** Versão compacta das análises no Dashboard — a completa (semana/mês/ano) fica em /analises. */
 export function AnalisesCard({
   transactions,
   colorByCategoria,
   iconByCategoria,
-  monthlyFlow,
+  originDateById,
 }: {
   transactions: Transaction[];
   colorByCategoria: Map<string, string>;
   iconByCategoria: Map<string, string>;
-  monthlyFlow: { monthKey: string; receitas: number; despesas: number; saldoMes: number }[];
+  originDateById: Map<string, string>;
 }) {
   const [tab, setTab] = useState<Tab>("categorias");
   const [monthKey, setMonthKey] = useState(currentMonthKey());
   const [categoriaTipo, setCategoriaTipo] = useState<TransactionType>("despesa");
+  const [categoriaAberta, setCategoriaAberta] = useState<string | null>(null);
 
-  const previousMonthKey = addMonthsToKey(monthKey, -1);
   const categoryBreakdown = computeCategoryBreakdown(transactions, monthKey, categoriaTipo);
-  const categoryBreakdownAnterior = computeCategoryBreakdown(transactions, previousMonthKey, categoriaTipo);
+  const categoryBreakdownAnterior = computeCategoryBreakdown(transactions, addMonthsToKey(monthKey, -1), categoriaTipo);
+  const periodoMes = periodContaining("mes", `${monthKey}-01`);
 
   return (
     <div className="rounded-card bg-surface shadow-card p-4">
@@ -59,38 +67,7 @@ export function AnalisesCard({
 
       {tab === "categorias" && (
         <>
-          <div className="mb-3 grid grid-cols-2 gap-1.5">
-            <button
-              onClick={() => setCategoriaTipo("despesa")}
-              className={`relative rounded-xl px-2 py-1.5 text-xs font-medium transition-colors ${
-                categoriaTipo === "despesa" ? "text-negative" : "text-ink-muted hover:bg-bg"
-              }`}
-            >
-              {categoriaTipo === "despesa" && (
-                <motion.span
-                  layoutId="analises-categoria-tipo-pill"
-                  className="absolute inset-0 rounded-xl bg-negative-soft"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
-                />
-              )}
-              <span className="relative">Despesas</span>
-            </button>
-            <button
-              onClick={() => setCategoriaTipo("receita")}
-              className={`relative rounded-xl px-2 py-1.5 text-xs font-medium transition-colors ${
-                categoriaTipo === "receita" ? "text-accent-strong" : "text-ink-muted hover:bg-bg"
-              }`}
-            >
-              {categoriaTipo === "receita" && (
-                <motion.span
-                  layoutId="analises-categoria-tipo-pill"
-                  className="absolute inset-0 rounded-xl bg-accent-soft"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
-                />
-              )}
-              <span className="relative">Receitas</span>
-            </button>
-          </div>
+          <TipoToggle value={categoriaTipo} onChange={setCategoriaTipo} />
           <div className="mb-3">
             <MonthFilter monthKey={monthKey} onChange={setMonthKey} className="bg-bg" />
           </div>
@@ -112,11 +89,33 @@ export function AnalisesCard({
               tipo={categoriaTipo}
               colorByCategoria={colorByCategoria}
               iconByCategoria={iconByCategoria}
+              onSelectCategoria={setCategoriaAberta}
             />
           )}
-          {tab === "evolucao" && <MonthlyFlowChart data={monthlyFlow} />}
+          {tab === "evolucao" && (
+            <FlowTrendChart data={computeFlowTrend(transactions, periodContaining("mes"), 6)} />
+          )}
         </motion.div>
       </AnimatePresence>
+
+      <Link
+        href="/analises"
+        className="mt-4 flex items-center justify-center gap-1.5 rounded-2xl bg-bg px-4 py-2.5 text-sm font-medium text-accent-strong transition-transform active:scale-[0.98]"
+      >
+        Ver análises por semana, mês e ano
+        <ArrowRight size={15} />
+      </Link>
+
+      <CategoryDetailSheet
+        categoria={categoriaAberta}
+        tipo={categoriaTipo}
+        periodo={periodoMes}
+        transactions={transactions}
+        colorByCategoria={colorByCategoria}
+        iconByCategoria={iconByCategoria}
+        originDateById={originDateById}
+        onClose={() => setCategoriaAberta(null)}
+      />
     </div>
   );
 }

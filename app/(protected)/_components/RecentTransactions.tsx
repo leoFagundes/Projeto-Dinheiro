@@ -6,13 +6,11 @@ import type { Transaction } from "@/lib/types";
 
 export function RecentTransactions({
   transactions,
-  onDelete,
   colorByCategoria,
   iconByCategoria,
   originDateById,
 }: {
   transactions: Transaction[];
-  onDelete: (id: string) => Promise<void>;
   colorByCategoria: Map<string, string>;
   iconByCategoria: Map<string, string>;
   originDateById?: Map<string, string>;
@@ -34,7 +32,6 @@ export function RecentTransactions({
           <TransactionListItem
             key={transaction.id}
             transaction={transaction}
-            onDelete={onDelete}
             colorByCategoria={colorByCategoria}
             iconByCategoria={iconByCategoria}
             originDateById={originDateById}

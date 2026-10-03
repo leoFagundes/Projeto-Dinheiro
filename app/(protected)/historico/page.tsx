@@ -19,6 +19,7 @@ import {
   type HistoryEntry,
 } from "@/lib/derived";
 import { currentMonthKey, monthKeyOfIsoDate } from "@/lib/format";
+import { formatDayHeader } from "@/lib/periods";
 import { downloadMonthlyReportCsv } from "@/lib/csv";
 import { MonthFilter } from "@/app/_components/MonthFilter";
 import { EmptyState } from "@/app/_components/EmptyState";
@@ -45,8 +46,30 @@ function matchesTipoFiltro(entry: HistoryEntry, filtro: TipoFiltro): boolean {
   return entry.tipo === filtro;
 }
 
+/**
+ * Agrupa a lista (já ordenada por data, mais recente primeiro) em dias, com
+ * o saldo do dia — só das receitas/despesas reais; movimentos de caixinha e
+ * cobranças ainda previstas não entram na conta.
+ */
+function agruparPorDia(entries: HistoryEntry[]) {
+  const grupos: { data: string; entries: HistoryEntry[]; saldo: number; temTransacoes: boolean }[] = [];
+  for (const entry of entries) {
+    let grupo = grupos[grupos.length - 1];
+    if (!grupo || grupo.data !== entry.data) {
+      grupo = { data: entry.data, entries: [], saldo: 0, temTransacoes: false };
+      grupos.push(grupo);
+    }
+    grupo.entries.push(entry);
+    if (entry.transaction) {
+      grupo.temTransacoes = true;
+      grupo.saldo += entry.transaction.tipo === "receita" ? entry.transaction.valor : -entry.transaction.valor;
+    }
+  }
+  return grupos;
+}
+
 export default function HistoricoPage() {
-  const { transactions, loading, deleteTransaction } = useTransactions();
+  const { transactions, loading } = useTransactions();
   const { categories } = useCategories();
   const { pockets, deletePocketMovement, deletePocketTransfer } = usePockets();
   const { movements: pocketMovements } = usePocketMovements();
@@ -240,23 +263,33 @@ export default function HistoricoPage() {
                 }
               />
             ) : (
-              <div className="flex flex-col gap-2">
-                <AnimatePresence initial={false}>
-                  {listaExibida.map((entry) =>
-                    entry.transaction ? (
-                      <TransactionListItem
-                        key={entry.id}
-                        transaction={entry.transaction}
-                        onDelete={deleteTransaction}
-                        colorByCategoria={colorByCategoria}
-                        iconByCategoria={iconByCategoria}
-                        originDateById={originDateById}
-                      />
-                    ) : (
-                      <HistoryEntryRow key={entry.id} entry={entry} />
-                    ),
-                  )}
-                </AnimatePresence>
+              <div className="flex flex-col gap-5">
+                {agruparPorDia(listaExibida).map((grupo) => (
+                  <section key={grupo.data}>
+                    <div className="mb-2 flex items-center justify-between px-1 text-xs">
+                      <span className="font-medium text-ink-muted">{formatDayHeader(grupo.data)}</span>
+                      {grupo.temTransacoes && <Money value={grupo.saldo} showSign className="font-medium" />}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <AnimatePresence initial={false}>
+                        {grupo.entries.map((entry) =>
+                          entry.transaction ? (
+                            <TransactionListItem
+                              key={entry.id}
+                              transaction={entry.transaction}
+                              colorByCategoria={colorByCategoria}
+                              iconByCategoria={iconByCategoria}
+                              originDateById={originDateById}
+                              hideDate
+                            />
+                          ) : (
+                            <HistoryEntryRow key={entry.id} entry={entry} hideDate />
+                          ),
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </section>
+                ))}
               </div>
             )}
           </motion.div>

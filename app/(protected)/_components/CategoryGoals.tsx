@@ -1,24 +1,31 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Target } from "lucide-react";
+import { AlertTriangle, Pencil, Target } from "lucide-react";
 import { toast } from "sonner";
 import { useCategories } from "@/lib/use-categories";
 import { computeCategoryBreakdown } from "@/lib/derived";
 import { currentMonthKey, formatMonthLabel } from "@/lib/format";
 import { categoryKey, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
+import { periodContaining } from "@/lib/periods";
 import { EmptyState } from "@/app/_components/EmptyState";
 import { MaskedCurrency } from "@/app/_components/Money";
 import { BottomSheet } from "@/app/_components/BottomSheet";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import { MonthFilter } from "@/app/_components/MonthFilter";
 import type { CategoryGoal, CategoryGoalOverride, Transaction } from "@/lib/types";
+import { CategoryDetailSheet } from "./CategoryDetailSheet";
+
+/** A partir de quanto do limite a categoria entra em "perto do limite". */
+const PERTO_DO_LIMITE = 0.85;
 
 export function CategoryGoals({
   goals,
   overrides,
   transactions,
+  colorByCategoria,
   iconByCategoria,
+  originDateById,
   onSetGoal,
   onRemoveGoal,
   onSetGoalOverride,
@@ -27,14 +34,17 @@ export function CategoryGoals({
   goals: CategoryGoal[];
   overrides: CategoryGoalOverride[];
   transactions: Transaction[];
+  colorByCategoria: Map<string, string>;
   iconByCategoria: Map<string, string>;
+  originDateById: Map<string, string>;
   onSetGoal: (categoria: string, limiteMensal: number) => Promise<void>;
-  onRemoveGoal: (id: string) => Promise<void>;
+  onRemoveGoal: (categoria: string) => Promise<void>;
   onSetGoalOverride: (categoria: string, monthKey: string, limiteMensal: number) => Promise<void>;
-  onRemoveGoalOverride: (id: string) => Promise<void>;
+  onRemoveGoalOverride: (categoria: string, monthKey: string) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [overriding, setOverriding] = useState<CategoryGoal | null>(null);
+  const [categoriaAberta, setCategoriaAberta] = useState<string | null>(null);
   const [monthKey, setMonthKey] = useState(currentMonthKey());
   const gastosPorCategoria = new Map(
     computeCategoryBreakdown(transactions, monthKey).map((item) => [item.categoria, item.total]),
@@ -67,46 +77,61 @@ export function CategoryGoals({
             const gasto = gastosPorCategoria.get(goal.categoria) ?? 0;
             const percent = Math.min((gasto / limiteEfetivo) * 100, 100);
             const over = gasto > limiteEfetivo;
+            const perto = !over && gasto >= limiteEfetivo * PERTO_DO_LIMITE;
             return (
-              <li key={goal.id} className="rounded-card bg-surface shadow-card p-4">
-                <div className="flex items-center justify-between gap-2 text-sm">
-                  <span className="flex min-w-0 items-center gap-1.5 font-medium">
-                    <span className="shrink-0">
-                      {iconByCategoria.get(categoryKey("despesa", goal.categoria)) ?? FALLBACK_CATEGORY_ICON}
+              <li key={goal.id} className="relative rounded-card bg-surface shadow-card">
+                <button
+                  onClick={() => setCategoriaAberta(goal.categoria)}
+                  aria-label={`Ver transações de ${goal.categoria}`}
+                  className="block w-full p-4 pr-11 text-left transition-transform active:scale-[0.99]"
+                >
+                  <span className="flex items-center justify-between gap-2 text-sm">
+                    <span className="flex min-w-0 items-center gap-1.5 font-medium">
+                      <span className="shrink-0">
+                        {iconByCategoria.get(categoryKey("despesa", goal.categoria)) ?? FALLBACK_CATEGORY_ICON}
+                      </span>
+                      <span className="truncate">{goal.categoria}</span>
                     </span>
-                    <span className="truncate">{goal.categoria}</span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-2">
-                    <span className={over ? "text-negative" : "text-ink-muted"}>
+                    <span className={`shrink-0 ${over ? "text-negative" : "text-ink-muted"}`}>
                       <MaskedCurrency value={gasto} /> / <MaskedCurrency value={limiteEfetivo} />
                     </span>
-                    <button
-                      onClick={() => setOverriding(goal)}
-                      aria-label={`Ajustar limite de ${goal.categoria} neste mês`}
-                      className="text-ink-muted transition-transform active:scale-90 hover:text-accent-strong"
-                    >
-                      <Pencil size={13} />
-                    </button>
                   </span>
-                </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-bg">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ease-out ${
-                      over ? "bg-negative" : "bg-accent"
-                    }`}
-                    style={{ width: `${percent}%` }}
-                  />
-                </div>
-                {override && (
-                  <p className="mt-1.5 text-[11px] text-accent-strong">
-                    limite personalizado pra {formatMonthLabel(monthKey).toLowerCase()}
-                  </p>
-                )}
-                {over && (
-                  <p className="mt-1.5 text-xs text-negative">
-                    <MaskedCurrency value={gasto - limiteEfetivo} /> acima do limite
-                  </p>
-                )}
+                  <span className="mt-2 block h-2 overflow-hidden rounded-full bg-bg">
+                    <span
+                      className={`block h-full rounded-full transition-all duration-500 ease-out ${
+                        over ? "bg-negative" : perto ? "bg-warning" : "bg-accent"
+                      }`}
+                      style={{ width: `${percent}%` }}
+                    />
+                  </span>
+                  {over ? (
+                    <span className="mt-1.5 flex items-center gap-1 text-xs text-negative">
+                      <AlertTriangle size={12} />
+                      <MaskedCurrency value={gasto - limiteEfetivo} /> acima do limite
+                    </span>
+                  ) : perto ? (
+                    <span className="mt-1.5 flex items-center gap-1 text-xs text-warning-strong">
+                      <AlertTriangle size={12} />
+                      Perto do limite · restam <MaskedCurrency value={limiteEfetivo - gasto} />
+                    </span>
+                  ) : (
+                    <span className="mt-1.5 block text-xs text-ink-muted">
+                      Restam <MaskedCurrency value={limiteEfetivo - gasto} />
+                    </span>
+                  )}
+                  {override && (
+                    <span className="mt-0.5 block text-[11px] text-accent-strong">
+                      limite personalizado pra {formatMonthLabel(monthKey).toLowerCase()}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setOverriding(goal)}
+                  aria-label={`Ajustar limite de ${goal.categoria} neste mês`}
+                  className="absolute right-3 top-3.5 flex size-7 items-center justify-center rounded-full text-ink-muted transition-transform active:scale-90 hover:bg-bg hover:text-accent-strong"
+                >
+                  <Pencil size={13} />
+                </button>
               </li>
             );
           })}
@@ -136,6 +161,17 @@ export function CategoryGoals({
         onRemoveGoalOverride={onRemoveGoalOverride}
         onClose={() => setOverriding(null)}
       />
+
+      <CategoryDetailSheet
+        categoria={categoriaAberta}
+        tipo="despesa"
+        periodo={periodContaining("mes", `${monthKey}-01`)}
+        transactions={transactions}
+        colorByCategoria={colorByCategoria}
+        iconByCategoria={iconByCategoria}
+        originDateById={originDateById}
+        onClose={() => setCategoriaAberta(null)}
+      />
     </div>
   );
 }
@@ -152,7 +188,7 @@ function MonthOverrideSheet({
   monthKey: string;
   existingOverride: CategoryGoalOverride | null;
   onSetGoalOverride: (categoria: string, monthKey: string, limiteMensal: number) => Promise<void>;
-  onRemoveGoalOverride: (id: string) => Promise<void>;
+  onRemoveGoalOverride: (categoria: string, monthKey: string) => Promise<void>;
   onClose: () => void;
 }) {
   return (
@@ -184,7 +220,7 @@ function MonthOverrideFields({
   monthKey: string;
   existingOverride: CategoryGoalOverride | null;
   onSetGoalOverride: (categoria: string, monthKey: string, limiteMensal: number) => Promise<void>;
-  onRemoveGoalOverride: (id: string) => Promise<void>;
+  onRemoveGoalOverride: (categoria: string, monthKey: string) => Promise<void>;
   onClose: () => void;
 }) {
   const monthLabel = formatMonthLabel(monthKey);
@@ -212,7 +248,7 @@ function MonthOverrideFields({
     if (!existingOverride) return;
     setSaving(true);
     try {
-      await onRemoveGoalOverride(existingOverride.id);
+      await onRemoveGoalOverride(goal.categoria, monthKey);
       toast.success("Voltou a usar o limite geral.");
       onClose();
     } catch {
@@ -270,7 +306,7 @@ function GoalsEditor({
   open: boolean;
   goals: CategoryGoal[];
   onSetGoal: (categoria: string, limiteMensal: number) => Promise<void>;
-  onRemoveGoal: (id: string) => Promise<void>;
+  onRemoveGoal: (categoria: string) => Promise<void>;
   onClose: () => void;
 }) {
   const { byType } = useCategories();
@@ -294,7 +330,7 @@ function GoalsEditor({
         if (valor > 0) {
           await onSetGoal(categoria.nome, valor);
         } else if (existing) {
-          await onRemoveGoal(existing.id);
+          await onRemoveGoal(categoria.nome);
         }
       }
       toast.success("Limites atualizados.");

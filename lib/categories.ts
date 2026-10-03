@@ -24,19 +24,21 @@ export function categoryKey(tipo: TransactionType, nome: string): string {
 
 /**
  * Paleta categórica com ordem fixa validada para distinção sob daltonismo
- * (ver skill de dataviz). Como categorias agora são definidas pelo usuário,
- * a cor de cada uma é atribuída pela posição em que foi criada — nunca por
- * valor/ranking — e cicla se houver mais categorias do que cores.
+ * (ver skill de dataviz) — variáveis CSS, com tons próprios no modo escuro
+ * (definidos em globals.css). Como categorias são definidas pelo usuário, a
+ * cor de cada uma é atribuída pela posição em que foi criada — nunca por
+ * valor/ranking — e cicla se houver mais categorias do que cores (por isso o
+ * donut agrupa a cauda em "Demais", ver CategoryPieChart).
  */
 export const CATEGORY_PALETTE = [
-  "#2a78d6",
-  "#eb6834",
-  "#1baf7a",
-  "#eda100",
-  "#e87ba4",
-  "#16a34a",
-  "#4a3aa7",
-  "#e34948",
+  "var(--color-cat-1)",
+  "var(--color-cat-2)",
+  "var(--color-cat-3)",
+  "var(--color-cat-4)",
+  "var(--color-cat-5)",
+  "var(--color-cat-6)",
+  "var(--color-cat-7)",
+  "var(--color-cat-8)",
 ];
 
 /** Mapeia categoria (tipo+nome) -> cor, na ordem em que cada categoria foi criada. */
@@ -54,6 +56,11 @@ export function assignCategoryColors(categories: Category[]): Map<string, string
 }
 
 export const FALLBACK_CATEGORY_COLOR = "#94a3b8";
+
+/** Fundo suave da bolinha do ícone de uma categoria (funciona com hex ou var(--...)). */
+export function categoryTint(color: string): string {
+  return `color-mix(in srgb, ${color} 14%, transparent)`;
+}
 
 /** Mapeia categoria (tipo+nome) -> ícone escolhido (ou o ícone padrão, se não houver). */
 export function mapCategoryIcons(categories: Category[]): Map<string, string> {

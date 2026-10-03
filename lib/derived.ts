@@ -195,6 +195,7 @@ export function computeNextChargeDate(
       const cycleMonth = `${year}-${anniversaryMonthNum}`;
       if (cycleMonth < templateMonth) continue; // recorrência ainda não começou
       if (template.recorrenteFim && cycleMonth > template.recorrenteFim) return null;
+      if (template.mesesExcluidos?.includes(cycleMonth)) continue;
       const cycleDate =
         instanceOn(cycleMonth)?.data ?? `${cycleMonth}-${clampDayToMonth(cycleMonth, originalDay)}`;
       if (cycleDate >= today) return cycleDate;
@@ -202,9 +203,10 @@ export function computeNextChargeDate(
     return null;
   }
 
-  for (const cycleMonth of [thisMonth, addMonthsToKey(thisMonth, 1)]) {
+  for (const cycleMonth of [thisMonth, addMonthsToKey(thisMonth, 1), addMonthsToKey(thisMonth, 2)]) {
     if (cycleMonth < templateMonth) continue; // recorrência ainda não começou
     if (template.recorrenteFim && cycleMonth > template.recorrenteFim) return null;
+    if (template.mesesExcluidos?.includes(cycleMonth)) continue;
     const cycleDate =
       instanceOn(cycleMonth)?.data ?? `${cycleMonth}-${clampDayToMonth(cycleMonth, originalDay)}`;
     if (cycleDate >= today) return cycleDate;
@@ -221,20 +223,6 @@ export function computeMonthTotals(transactions: Transaction[], monthKey: string
     .filter((t) => t.tipo === "despesa")
     .reduce((sum, t) => sum + t.valor, 0);
   return { receitas, despesas, saldoMes: receitas - despesas };
-}
-
-/** Variação percentual de despesas em relação ao mês anterior (null se não houver base de comparação). */
-export function computeDespesasVariacao(
-  transactions: Transaction[],
-  monthKey: string,
-): number | null {
-  const despesasMes = computeMonthTotals(transactions, monthKey).despesas;
-  const despesasMesAnterior = computeMonthTotals(
-    transactions,
-    addMonthsToKey(monthKey, -1),
-  ).despesas;
-  if (despesasMesAnterior === 0) return null;
-  return ((despesasMes - despesasMesAnterior) / despesasMesAnterior) * 100;
 }
 
 export function computeCategoryBreakdown(
@@ -297,6 +285,7 @@ export function computeMonthEvents(
     if (templateMonth === monthKey) continue; // já contado acima como transação real
     if (monthKey < templateMonth) continue; // recorrência ainda não começou
     if (template.recorrenteFim && monthKey > template.recorrenteFim) continue;
+    if (template.mesesExcluidos?.includes(monthKey)) continue;
     if (template.recorrenciaIntervalo === "anual" && monthKey.slice(5, 7) !== templateMonth.slice(5, 7)) {
       continue;
     }
@@ -437,18 +426,6 @@ export function computeMonthProgress(transactions: Transaction[], monthKey: stri
     despesasAPagar,
     despesasMesAnteriorMesmoPeriodo,
   };
-}
-
-/** Receitas x despesas mês a mês (não é um saldo acumulado — cada mês é independente). */
-export function computeMonthlyFlowTrend(
-  transactions: Transaction[],
-  months = 6,
-): { monthKey: string; receitas: number; despesas: number; saldoMes: number }[] {
-  const currentKey = currentMonthKey();
-  const keys: string[] = [];
-  for (let i = months - 1; i >= 0; i--) keys.push(addMonthsToKey(currentKey, -i));
-
-  return keys.map((monthKey) => ({ monthKey, ...computeMonthTotals(transactions, monthKey) }));
 }
 
 /** Valor atual da carteira separado por tipo (renda fixa x variável), pra ver a composição. */
@@ -620,6 +597,7 @@ export function computeProjectedSubscriptionEntries(
     if (templateMonth === monthKey) continue; // já é uma transação real
     if (monthKey < templateMonth) continue;
     if (template.recorrenteFim && monthKey > template.recorrenteFim) continue;
+    if (template.mesesExcluidos?.includes(monthKey)) continue;
     if (
       template.recorrenciaIntervalo === "anual" &&
       monthKey.slice(5, 7) !== templateMonth.slice(5, 7)

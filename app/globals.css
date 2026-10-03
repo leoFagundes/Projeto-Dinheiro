@@ -14,12 +14,29 @@
   --color-negative: #e05252;
   --color-negative-soft: #fbebeb;
 
+  /* "Perto do limite" — status, nunca usado como cor de série. */
+  --color-warning: #d97706;
+  --color-warning-strong: #b45309;
+  --color-warning-soft: #fef3e2;
+
   --color-chart-1: #2a78d6;
-  --color-chart-2: #eb6834;
-  --color-chart-3: #1baf7a;
-  --color-chart-4: #eda100;
-  --color-chart-5: #e87ba4;
-  --color-chart-6: #4a3aa7;
+
+  /* Cor neutra pra série de contexto (ex: "período anterior") — some atrás da série principal. */
+  --color-chart-muted: #b8b1a9;
+
+  /*
+   * Paleta categórica (ordem fixa, validada pra daltonismo com o validador
+   * da skill de dataviz). O modo escuro tem seus próprios tons (abaixo) —
+   * os do claro ficam claros demais/escuros demais no fundo escuro.
+   */
+  --color-cat-1: #2a78d6;
+  --color-cat-2: #eb6834;
+  --color-cat-3: #1baf7a;
+  --color-cat-4: #eda100;
+  --color-cat-5: #e87ba4;
+  --color-cat-6: #16a34a;
+  --color-cat-7: #4a3aa7;
+  --color-cat-8: #e34948;
 
   --radius-card: 1.25rem;
 
@@ -46,6 +63,22 @@
 
   --color-negative: #f87171;
   --color-negative-soft: #3a1f1f;
+
+  --color-warning: #f59e0b;
+  --color-warning-strong: #fbbf24;
+  --color-warning-soft: #3a2c14;
+
+  --color-chart-1: #3987e5;
+  --color-chart-muted: #5c554d;
+
+  --color-cat-1: #3987e5;
+  --color-cat-2: #d95926;
+  --color-cat-3: #199e70;
+  --color-cat-4: #c98500;
+  --color-cat-5: #d55181;
+  --color-cat-6: #008300;
+  --color-cat-7: #9085e9;
+  --color-cat-8: #e66767;
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 10px 24px -16px rgba(0, 0, 0, 0.5);
 }
