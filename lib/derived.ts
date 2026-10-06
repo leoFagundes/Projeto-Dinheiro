@@ -250,6 +250,67 @@ export function computePocketRendimento(pocket: Pocket, movements: PocketMovemen
     .reduce((sum, m) => sum + m.valor, 0);
 }
 
+function isoDateOfTimestamp(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Total guardado nas caixinhas no fim de cada um dos últimos `meses` meses.
+ * Não existe foto do saldo de cada mês, então reconstrói de trás pra frente:
+ * parte do saldo atual de cada caixinha e desfaz tudo que aconteceu depois
+ * daquele mês (depósitos, retiradas, rendimentos e transferências). Antes da
+ * caixinha existir ela conta zero — o saldo inicial aparece no mês em que foi
+ * criada. Ajustes feitos editando o saldo direto não deixam registro, então
+ * contam como se sempre tivessem estado lá. Começa no primeiro mês com
+ * alguma caixinha (sem uma fileira de zeros antes).
+ */
+export function computePocketsTotalTrend(
+  pockets: Pocket[],
+  movements: PocketMovement[],
+  transfers: PocketTransfer[],
+  meses = 12,
+): { monthKey: string; total: number }[] {
+  const thisMonth = currentMonthKey();
+  const efeitosPorCaixinha = new Map<string, { data: string; valor: number }[]>();
+  const registrar = (pocketId: string, data: string, valor: number) => {
+    const lista = efeitosPorCaixinha.get(pocketId) ?? [];
+    lista.push({ data, valor });
+    efeitosPorCaixinha.set(pocketId, lista);
+  };
+  for (const m of movements) registrar(m.pocketId, m.data, m.tipo === "retirada" ? -m.valor : m.valor);
+  for (const t of transfers) {
+    registrar(t.fromPocketId, t.data, -t.valor);
+    registrar(t.toPocketId, t.data, t.valor);
+  }
+
+  const inicioPorCaixinha = new Map(
+    pockets.map((p) => {
+      const datas = (efeitosPorCaixinha.get(p.id) ?? []).map((e) => e.data);
+      return [p.id, [isoDateOfTimestamp(p.criadoEm), ...datas].sort()[0]];
+    }),
+  );
+
+  const pontos = Array.from({ length: meses }, (_, i) => {
+    const monthKey = addMonthsToKey(thisMonth, i - (meses - 1));
+    const fimDoMes = `${monthKey}-31`; // comparação de string: pega qualquer dia do mês
+    let total = 0;
+    let algumaExistia = false;
+    for (const pocket of pockets) {
+      if ((inicioPorCaixinha.get(pocket.id) ?? "") > fimDoMes) continue;
+      algumaExistia = true;
+      const depois = (efeitosPorCaixinha.get(pocket.id) ?? [])
+        .filter((e) => e.data > fimDoMes)
+        .reduce((sum, e) => sum + e.valor, 0);
+      total += Math.max(0, pocket.saldo - depois);
+    }
+    return { monthKey, total: Math.round(total * 100) / 100, algumaExistia };
+  });
+
+  const primeiro = pontos.findIndex((p) => p.algumaExistia);
+  return primeiro === -1 ? [] : pontos.slice(primeiro).map(({ monthKey, total }) => ({ monthKey, total }));
+}
+
 /**
  * Eventos (reais + recorrências projetadas) de um mês, para o calendário.
  * Transações já existentes (inclusive parcelas futuras já geradas) entram
@@ -698,8 +759,16 @@ export function computeUnifiedHistory(params: {
             ? `Caixinha ${caixinha} — retirada`
             : `Caixinha ${caixinha} — rendimento`,
       valor: Math.abs(m.valor),
+      // Depósito sai do seu dinheiro (−), retirada volta (+); rendimento é o
+      // que a caixinha ganhou (+) ou perdeu (−).
       direcao:
-        m.tipo === "retirada" || (m.tipo === "rendimento" && m.valor < 0) ? "positivo" : "negativo",
+        m.tipo === "rendimento"
+          ? m.valor >= 0
+            ? "positivo"
+            : "negativo"
+          : m.tipo === "retirada"
+            ? "positivo"
+            : "negativo",
       onDelete: onDeletePocketMovement ? () => onDeletePocketMovement(m) : undefined,
     });
   }
@@ -720,7 +789,13 @@ export function computeUnifiedHistory(params: {
       detalhe: m.cotas ? `${m.cotas} cotas` : undefined,
       valor: Math.abs(m.valor),
       direcao:
-        m.tipo === "resgate" || (m.tipo === "rendimento" && m.valor < 0) ? "positivo" : "negativo",
+        m.tipo === "rendimento"
+          ? m.valor >= 0
+            ? "positivo"
+            : "negativo"
+          : m.tipo === "resgate"
+            ? "positivo"
+            : "negativo",
       onDelete: onDeleteInvestmentMovement ? () => onDeleteInvestmentMovement(m) : undefined,
     });
   }

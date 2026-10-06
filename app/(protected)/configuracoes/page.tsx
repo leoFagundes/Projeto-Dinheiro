@@ -37,7 +37,14 @@ import {
   supportsBiometric,
 } from "@/lib/app-lock";
 import { buildBackup, deleteAllUserData, downloadBackup, importBackup, type BackupData } from "@/lib/backup";
-import { FALLBACK_CATEGORY_ICON } from "@/lib/categories";
+import {
+  categoryColorValue,
+  categoryTint,
+  FALLBACK_CATEGORY_ICON,
+  resolveCategoryColors,
+  type CategoryColor,
+} from "@/lib/categories";
+import { CategoryColorField } from "@/app/_components/CategoryColorField";
 import { BirdIcon } from "@/app/_components/BirdIcon";
 import { CurrencyInput } from "@/app/_components/CurrencyInput";
 import { PageFade } from "@/app/_components/PageFade";
@@ -81,7 +88,7 @@ function CategoriasSection() {
   const [removing, setRemoving] = useState<{ id: string; nome: string; tipo: TransactionType } | null>(null);
   const [editing, setEditing] = useState<Category | null>(null);
 
-  async function handleUpdateCategory(id: string, input: { nome: string; icone: string }) {
+  async function handleUpdateCategory(id: string, input: EditCategoryInput) {
     const original = categories.find((c) => c.id === id);
     if (!original) return;
     const duplicada = categories.some(
@@ -102,8 +109,11 @@ function CategoriasSection() {
     }
   }
 
-  const despesas = categories.filter((c) => c.tipo === "despesa");
-  const receitas = categories.filter((c) => c.tipo === "receita");
+  const colorById = resolveCategoryColors(categories);
+  const grupos = [
+    { titulo: "Despesas", itens: categories.filter((c) => c.tipo === "despesa") },
+    { titulo: "Receitas", itens: categories.filter((c) => c.tipo === "receita") },
+  ];
 
   return (
     <SectionCard icon={Tags} title="Categorias">
@@ -112,44 +122,35 @@ function CategoriasSection() {
       </div>
 
       <div className="flex flex-col gap-4 text-sm">
-        <div>
-          <p className="mb-2 text-xs text-ink-muted">Despesas</p>
-          <ul className="flex flex-col gap-1.5">
-            {despesas.map((c) => (
-              <li key={c.id} className="flex items-center justify-between gap-2 rounded-xl bg-bg px-3 py-2">
-                <span className="flex min-w-0 items-center gap-2">
-                  <span className="shrink-0">{c.icone ?? FALLBACK_CATEGORY_ICON}</span>
-                  <span className="truncate">{c.nome}</span>
-                </span>
-                <RowActionButtons
-                  onEdit={() => setEditing(c)}
-                  onRemove={() => setRemoving({ id: c.id, nome: c.nome, tipo: c.tipo })}
-                  editLabel="Editar categoria"
-                  removeLabel="Remover categoria"
-                />
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div>
-          <p className="mb-2 text-xs text-ink-muted">Receitas</p>
-          <ul className="flex flex-col gap-1.5">
-            {receitas.map((c) => (
-              <li key={c.id} className="flex items-center justify-between gap-2 rounded-xl bg-bg px-3 py-2">
-                <span className="flex min-w-0 items-center gap-2">
-                  <span className="shrink-0">{c.icone ?? FALLBACK_CATEGORY_ICON}</span>
-                  <span className="truncate">{c.nome}</span>
-                </span>
-                <RowActionButtons
-                  onEdit={() => setEditing(c)}
-                  onRemove={() => setRemoving({ id: c.id, nome: c.nome, tipo: c.tipo })}
-                  editLabel="Editar categoria"
-                  removeLabel="Remover categoria"
-                />
-              </li>
-            ))}
-          </ul>
-        </div>
+        {grupos.map((grupo) => (
+          <div key={grupo.titulo}>
+            <p className="mb-2 text-xs text-ink-muted">{grupo.titulo}</p>
+            <ul className="flex flex-col gap-1.5">
+              {grupo.itens.map((c) => {
+                const cor = categoryColorValue(colorById.get(c.id) ?? 0);
+                return (
+                  <li key={c.id} className="flex items-center justify-between gap-2 rounded-xl bg-bg px-3 py-2">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        className="flex size-7 shrink-0 items-center justify-center rounded-full text-sm"
+                        style={{ backgroundColor: categoryTint(cor), boxShadow: `inset 0 0 0 1.5px ${cor}` }}
+                      >
+                        {c.icone ?? FALLBACK_CATEGORY_ICON}
+                      </span>
+                      <span className="truncate">{c.nome}</span>
+                    </span>
+                    <RowActionButtons
+                      onEdit={() => setEditing(c)}
+                      onRemove={() => setRemoving({ id: c.id, nome: c.nome, tipo: c.tipo })}
+                      editLabel="Editar categoria"
+                      removeLabel="Remover categoria"
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
       </div>
 
       <ConfirmDialog
@@ -170,24 +171,39 @@ function CategoriasSection() {
         onCancel={() => setRemoving(null)}
       />
 
-      <EditCategorySheet categoria={editing} onSave={handleUpdateCategory} onClose={() => setEditing(null)} />
+      <EditCategorySheet
+        categoria={editing}
+        categories={categories}
+        onSave={handleUpdateCategory}
+        onClose={() => setEditing(null)}
+      />
     </SectionCard>
   );
 }
 
+type EditCategoryInput = { nome: string; icone: string; cor: CategoryColor };
+
 function EditCategorySheet({
   categoria,
+  categories,
   onSave,
   onClose,
 }: {
   categoria: Category | null;
-  onSave: (id: string, input: { nome: string; icone: string }) => Promise<void>;
+  categories: Category[];
+  onSave: (id: string, input: EditCategoryInput) => Promise<void>;
   onClose: () => void;
 }) {
   return (
     <BottomSheet open={categoria !== null} onClose={onClose}>
       {categoria && (
-        <EditCategoryFields key={categoria.id} categoria={categoria} onSave={onSave} onClose={onClose} />
+        <EditCategoryFields
+          key={categoria.id}
+          categoria={categoria}
+          categories={categories}
+          onSave={onSave}
+          onClose={onClose}
+        />
       )}
     </BottomSheet>
   );
@@ -195,15 +211,18 @@ function EditCategorySheet({
 
 function EditCategoryFields({
   categoria,
+  categories,
   onSave,
   onClose,
 }: {
   categoria: Category;
-  onSave: (id: string, input: { nome: string; icone: string }) => Promise<void>;
+  categories: Category[];
+  onSave: (id: string, input: EditCategoryInput) => Promise<void>;
   onClose: () => void;
 }) {
   const [nome, setNome] = useState(categoria.nome);
   const [icone, setIcone] = useState(categoria.icone ?? FALLBACK_CATEGORY_ICON);
+  const [cor, setCor] = useState<CategoryColor>(() => resolveCategoryColors(categories).get(categoria.id) ?? 0);
   const [pickingIcon, setPickingIcon] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -214,7 +233,7 @@ function EditCategoryFields({
     }
     setSaving(true);
     try {
-      await onSave(categoria.id, { nome: nome.trim(), icone });
+      await onSave(categoria.id, { nome: nome.trim(), icone, cor });
       toast.success("Categoria atualizada.");
       onClose();
     } catch (error) {
@@ -232,10 +251,12 @@ function EditCategoryFields({
           type="button"
           onClick={() => setPickingIcon(true)}
           aria-label="Escolher ícone"
-          className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-border bg-bg text-lg transition-transform active:scale-95"
+          className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-border text-lg transition-transform active:scale-95"
+          style={{ backgroundColor: categoryTint(categoryColorValue(cor)) }}
         >
           {icone}
         </button>
+        <CategoryColorField value={cor} categories={categories} excludeId={categoria.id} onChange={setCor} />
         <input
           type="text"
           placeholder="Nome da categoria"

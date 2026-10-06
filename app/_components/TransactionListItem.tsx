@@ -6,6 +6,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ChoiceDialog } from "./ChoiceDialog";
 import { Money } from "./Money";
+import { TransactionDetailSheet } from "./TransactionDetailSheet";
 import { TransactionFormSheet } from "./TransactionFormSheet";
 import { useTransactions } from "@/lib/use-transactions";
 import { opcoesDeExclusao, type OpcaoExclusao } from "@/lib/delete-options";
@@ -36,6 +37,7 @@ export function TransactionListItem({
   originDateById?: Map<string, string>;
 }) {
   const { transactions, deleteTransactions } = useTransactions();
+  const [viewing, setViewing] = useState(false);
   const [editing, setEditing] = useState(false);
   const [opcoes, setOpcoes] = useState<OpcaoExclusao[] | null>(null);
   const signedValue = transaction.tipo === "receita" ? transaction.valor : -transaction.valor;
@@ -77,10 +79,10 @@ export function TransactionListItem({
         exit={{ opacity: 0, scale: 0.96 }}
         transition={{ duration: 0.18 }}
       >
-        <div className="flex items-center justify-between gap-3 rounded-card bg-surface shadow-card px-4 py-3">
+        <div className="flex items-center justify-between gap-2 rounded-card bg-surface shadow-card py-3 pl-4 pr-2">
           <button
-            onClick={() => setEditing(true)}
-            aria-label="Editar transação"
+            onClick={() => setViewing(true)}
+            aria-label={`Ver detalhes de ${transaction.descricao}`}
             className="flex min-w-0 flex-1 items-center gap-3 text-left"
           >
             <span
@@ -102,20 +104,42 @@ export function TransactionListItem({
                 {transaction.emprestimoId ? " · empréstimo" : ""}
               </p>
             </span>
-            <Pencil size={13} className="shrink-0 text-ink-muted/50" />
+            <Money value={signedValue} showSign className="shrink-0 text-sm font-medium" />
           </button>
-          <div className="flex shrink-0 items-center gap-3">
-            <Money value={signedValue} showSign className="text-sm font-medium" />
+          <div className="flex shrink-0 items-center">
+            <button
+              onClick={() => setEditing(true)}
+              aria-label="Editar transação"
+              className="flex size-8 items-center justify-center rounded-full text-ink-muted transition-transform active:scale-90 hover:bg-bg hover:text-ink"
+            >
+              <Pencil size={15} />
+            </button>
             <button
               onClick={handleDeleteClick}
               aria-label="Excluir transação"
-              className="text-ink-muted transition-transform active:scale-90 hover:text-negative"
+              className="flex size-8 items-center justify-center rounded-full text-ink-muted transition-transform active:scale-90 hover:bg-bg hover:text-negative"
             >
-              <Trash2 size={16} />
+              <Trash2 size={15} />
             </button>
           </div>
         </div>
       </motion.div>
+
+      <TransactionDetailSheet
+        open={viewing}
+        transaction={transaction}
+        color={categoriaColor}
+        icon={categoriaIcon}
+        onClose={() => setViewing(false)}
+        onEdit={() => {
+          setViewing(false);
+          setEditing(true);
+        }}
+        onDelete={() => {
+          setViewing(false);
+          handleDeleteClick();
+        }}
+      />
 
       <TransactionFormSheet open={editing} onClose={() => setEditing(false)} transaction={transaction} />
 

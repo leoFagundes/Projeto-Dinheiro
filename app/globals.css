@@ -25,18 +25,32 @@
   --color-chart-muted: #b8b1a9;
 
   /*
-   * Paleta categórica (ordem fixa, validada pra daltonismo com o validador
-   * da skill de dataviz). O modo escuro tem seus próprios tons (abaixo) —
-   * os do claro ficam claros demais/escuros demais no fundo escuro.
+   * Paleta categórica: 20 tons, um por categoria (sem repetir). Escolhidos
+   * maximizando a menor distância perceptual (OKLab) entre QUALQUER par, em
+   * ordem — as primeiras cores são as mais distintas entre si, e quem tem
+   * poucas categorias só usa essas. O modo escuro tem tons próprios (abaixo),
+   * de matiz parecida, ajustados pra luminosidade/contraste do fundo escuro.
    */
   --color-cat-1: #2a78d6;
-  --color-cat-2: #eb6834;
-  --color-cat-3: #1baf7a;
-  --color-cat-4: #eda100;
-  --color-cat-5: #e87ba4;
-  --color-cat-6: #16a34a;
-  --color-cat-7: #4a3aa7;
-  --color-cat-8: #e34948;
+  --color-cat-2: #26c526;
+  --color-cat-3: #d83131;
+  --color-cat-4: #ca31d8;
+  --color-cat-5: #d49f54;
+  --color-cat-6: #2b824f;
+  --color-cat-7: #8b2371;
+  --color-cat-8: #47b8c2;
+  --color-cat-9: #5b26c5;
+  --color-cat-10: #d175a3;
+  --color-cat-11: #8b4523;
+  --color-cat-12: #ab7221;
+  --color-cat-13: #1c5792;
+  --color-cat-14: #8954d4;
+  --color-cat-15: #c52683;
+  --color-cat-16: #8fa329;
+  --color-cat-17: #6599e2;
+  --color-cat-18: #21ab7d;
+  --color-cat-19: #2194ab;
+  --color-cat-20: #dd6f4b;
 
   --radius-card: 1.25rem;
 
@@ -71,14 +85,26 @@
   --color-chart-1: #3987e5;
   --color-chart-muted: #5c554d;
 
-  --color-cat-1: #3987e5;
-  --color-cat-2: #d95926;
-  --color-cat-3: #199e70;
-  --color-cat-4: #c98500;
-  --color-cat-5: #d55181;
-  --color-cat-6: #008300;
-  --color-cat-7: #9085e9;
-  --color-cat-8: #e66767;
+  --color-cat-1: #565de1;
+  --color-cat-2: #1fb21f;
+  --color-cat-3: #d4252e;
+  --color-cat-4: #e04dd1;
+  --color-cat-5: #c38437;
+  --color-cat-6: #367d36;
+  --color-cat-7: #ba21b3;
+  --color-cat-8: #1ea9a9;
+  --color-cat-9: #a667e4;
+  --color-cat-10: #c374ab;
+  --color-cat-11: #a15345;
+  --color-cat-12: #927020;
+  --color-cat-13: #4869a8;
+  --color-cat-14: #8750b4;
+  --color-cat-15: #da2b82;
+  --color-cat-16: #8f9b22;
+  --color-cat-17: #7d8de3;
+  --color-cat-18: #1ca065;
+  --color-cat-19: #218cba;
+  --color-cat-20: #e3655f;
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 10px 24px -16px rgba(0, 0, 0, 0.5);
 }

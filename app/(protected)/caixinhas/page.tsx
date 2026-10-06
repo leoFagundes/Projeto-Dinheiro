@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { PiggyBank, Trash2 } from "lucide-react";
+import { LineChart as LineChartIcon, PiggyBank, Trash2 } from "lucide-react";
 import { usePockets } from "@/lib/use-pockets";
 import { usePocketMovements } from "@/lib/use-pocket-movements";
-import { computePocketRendimento } from "@/lib/derived";
+import { usePocketTransfers } from "@/lib/use-pocket-transfers";
+import { computePocketRendimento, computePocketsTotalTrend } from "@/lib/derived";
+import { categoryColorForSlot, FALLBACK_CATEGORY_COLOR } from "@/lib/categories";
+import { AreaTrendChart, ShareBar } from "../_components/Charts";
 import { formatDate, todayIsoDate } from "@/lib/format";
 import { PageFade } from "@/app/_components/PageFade";
 import { EmptyState } from "@/app/_components/EmptyState";
@@ -35,6 +38,17 @@ export default function CaixinhasPage() {
     transferBetweenPockets,
   } = usePockets();
   const { movements } = usePocketMovements();
+  const { transfers } = usePocketTransfers();
+
+  // Cor fixa por caixinha (pela ordem de criação), a mesma na barra do total
+  // e no card — a cor acompanha a caixinha.
+  const colorByPocket = new Map(pockets.map((pocket, index) => [pocket.id, categoryColorForSlot(index)]));
+  const totalGuardado = pockets.reduce((sum, p) => sum + p.saldo, 0);
+  const evolucao = computePocketsTotalTrend(pockets, movements, transfers);
+  const variacaoMes =
+    evolucao.length > 0
+      ? Math.round((evolucao[evolucao.length - 1].total - (evolucao[evolucao.length - 2]?.total ?? 0)) * 100) / 100
+      : 0;
 
   const [adding, setAdding] = useState(false);
   const [nome, setNome] = useState("");
@@ -103,9 +117,27 @@ export default function CaixinhasPage() {
         {pockets.length > 0 && (
           <div className="rounded-card bg-surface shadow-card p-4">
             <p className="text-xs text-ink-muted">Total guardado</p>
-            <p className="mt-1 text-lg font-semibold text-accent-strong">
-              <MaskedCurrency value={pockets.reduce((sum, p) => sum + p.saldo, 0)} />
+            <p className="mt-1 text-2xl font-semibold text-accent-strong">
+              <MaskedCurrency value={totalGuardado} />
             </p>
+            {variacaoMes !== 0 && (
+              <p className={`mt-0.5 text-xs ${variacaoMes > 0 ? "text-accent-strong" : "text-negative"}`}>
+                {variacaoMes > 0 ? "+" : "−"}
+                <MaskedCurrency value={Math.abs(variacaoMes)} /> este mês
+              </p>
+            )}
+            {pockets.filter((p) => p.saldo > 0).length > 1 && (
+              <div className="mt-4">
+                <ShareBar
+                  items={pockets.map((pocket) => ({
+                    id: pocket.id,
+                    label: pocket.nome,
+                    value: pocket.saldo,
+                    color: colorByPocket.get(pocket.id) ?? FALLBACK_CATEGORY_COLOR,
+                  }))}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -129,9 +161,13 @@ export default function CaixinhasPage() {
                     className={`rounded-card bg-surface shadow-card p-4 ${pocket.oculto ? "opacity-50" : ""}`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="min-w-0 truncate text-sm font-medium">
-                        {pocket.nome}
-                        {pocket.oculto && <span className="ml-1.5 text-xs text-ink-muted">(oculta)</span>}
+                      <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                        <span
+                          className="size-2.5 shrink-0 rounded-sm"
+                          style={{ backgroundColor: colorByPocket.get(pocket.id) }}
+                        />
+                        <span className="truncate">{pocket.nome}</span>
+                        {pocket.oculto && <span className="shrink-0 text-xs text-ink-muted">(oculta)</span>}
                       </span>
                       <RowActionButtons
                         hiddenState={{
@@ -197,6 +233,19 @@ export default function CaixinhasPage() {
                 total guardado.
               </p>
             )}
+
+            <section className="rounded-card bg-surface shadow-card p-4">
+              <p className="text-sm font-medium">Evolução do total guardado</p>
+              <p className="mb-3 mt-0.5 text-xs text-ink-muted">Quanto havia nas caixinhas no fim de cada mês</p>
+              <AreaTrendChart
+                data={evolucao}
+                label="Total guardado"
+                color="var(--color-accent)"
+                icon={LineChartIcon}
+                emptyTitle="Ainda sem histórico"
+                emptyDescription="A evolução aparece a partir do segundo mês com caixinhas."
+              />
+            </section>
           </>
         )}
       </div>

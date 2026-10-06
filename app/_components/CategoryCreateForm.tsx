@@ -3,13 +3,20 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
-import { FALLBACK_CATEGORY_ICON } from "@/lib/categories";
+import {
+  categoryColorValue,
+  categoryTint,
+  FALLBACK_CATEGORY_ICON,
+  nextFreeCategoryColor,
+  type CategoryColor,
+} from "@/lib/categories";
 import { EmojiPickerSheet } from "./EmojiPickerSheet";
 import { BottomSheet } from "./BottomSheet";
+import { CategoryColorField } from "./CategoryColorField";
 import { INPUT_CLASS_COMPACT, SAVE_BUTTON_CLASS } from "./SettingsFormKit";
 import type { Category, TransactionType } from "@/lib/types";
 
-type CreateCategory = (nome: string, tipo: TransactionType, icone: string) => Promise<void>;
+type CreateCategory = (nome: string, tipo: TransactionType, icone: string, cor?: CategoryColor) => Promise<void>;
 
 /**
  * Formulário de nova categoria (emoji + nome), usado em Ajustes e dentro do
@@ -33,9 +40,12 @@ export function CategoryCreateForm({
   const [nome, setNome] = useState("");
   const [tipoEscolhido, setTipoEscolhido] = useState<TransactionType>("despesa");
   const [icone, setIcone] = useState(FALLBACK_CATEGORY_ICON);
+  // null = a sugestão padrão (próxima cor livre), que acompanha as categorias.
+  const [corEscolhida, setCorEscolhida] = useState<CategoryColor | null>(null);
   const [pickingIcon, setPickingIcon] = useState(false);
   const [saving, setSaving] = useState(false);
   const tipo = tipoFixo ?? tipoEscolhido;
+  const cor = corEscolhida ?? nextFreeCategoryColor(categories);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -53,10 +63,11 @@ export function CategoryCreateForm({
     }
     setSaving(true);
     try {
-      await onCreate(nomeNormalizado, tipo, icone);
+      await onCreate(nomeNormalizado, tipo, icone, cor);
       toast.success("Categoria criada.");
       setNome("");
       setIcone(FALLBACK_CATEGORY_ICON);
+      setCorEscolhida(null);
       onCreated?.(nomeNormalizado);
     } catch {
       toast.error("Não foi possível criar a categoria.");
@@ -73,10 +84,12 @@ export function CategoryCreateForm({
             type="button"
             onClick={() => setPickingIcon(true)}
             aria-label="Escolher ícone"
-            className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-bg text-lg transition-transform active:scale-95"
+            className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border text-lg transition-transform active:scale-95"
+            style={{ backgroundColor: categoryTint(categoryColorValue(cor)) }}
           >
             {icone}
           </button>
+          <CategoryColorField value={cor} categories={categories} onChange={setCorEscolhida} />
           <input
             type="text"
             placeholder="Nova categoria"

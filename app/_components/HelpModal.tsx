@@ -101,6 +101,11 @@ const TABS: HelpTab[] = [
           'Qualquer despesa nova pode ser parcelada — o app já lança todas as parcelas nos meses seguintes. Se a compra já estava em andamento (ex: você já pagou 3 das 10 parcelas em outro controle), use "a partir da parcela" pra começar do número certo.',
       },
       {
+        titulo: "Vendo, editando e excluindo",
+        texto:
+          "Em qualquer lista, tocar numa transação abre o resumo completo dela: descrição inteira, situação (pago, a pagar…), parcela e quanto falta da compra, dados do empréstimo ou da assinatura. Pra editar direto, toque no lápis; pra excluir, na lixeira — os dois também estão dentro do resumo.",
+      },
+      {
         titulo: "Excluindo uma transação",
         texto:
           'Transações simples (sem parcelamento, empréstimo ou recorrência) somem na hora e mostram um aviso com "Desfazer" por alguns segundos — dá tempo de arrepender. Transações mais complexas (parcelas, assinaturas, empréstimos) pedem confirmação antes, já que a exclusão pode afetar outras parcelas/lançamentos ligados a ela.',
@@ -146,7 +151,12 @@ const TABS: HelpTab[] = [
       {
         titulo: "Guardando e rendendo",
         texto:
-          "Toque numa caixinha pra Adicionar, Retirar ou registrar Rendimento — tudo fica no histórico dela. Rendimento não é um novo depósito — é você informando o saldo real de hoje (depois de render juros), e o app calcula a diferença. O total guardado em todas as caixinhas aparece resumido no topo da aba.",
+          "Toque numa caixinha pra Adicionar, Retirar ou registrar Rendimento — tudo fica no histórico dela. Rendimento não é um novo depósito — é você informando o saldo real de hoje (depois de render juros), e o app calcula a diferença.",
+      },
+      {
+        titulo: "Gráficos das caixinhas",
+        texto:
+          'No topo fica o total guardado, quanto ele mudou no mês e uma barra mostrando quanto cada caixinha representa do total (cada caixinha tem a sua cor, a mesma do card dela). Embaixo da lista, "Evolução do total guardado" mostra quanto havia nas caixinhas no fim de cada mês.',
       },
     ],
   },
@@ -189,7 +199,7 @@ const TABS: HelpTab[] = [
       {
         titulo: "Categorias e orçamento",
         texto:
-          "Em Ajustes você cria e edita categorias de receita/despesa (com ícone), define limites mensais por categoria e um orçamento mensal total — um teto único pra tudo que você gasta no mês, além dos limites individuais.",
+          "Em Ajustes você cria e edita categorias de receita/despesa (com ícone e cor — o app sugere uma cor que nenhuma outra categoria usa, mas você pode escolher qualquer uma, inclusive repetir ou criar uma cor personalizada), define limites mensais por categoria e um orçamento mensal total — um teto único pra tudo que você gasta no mês, além dos limites individuais.",
       },
       {
         titulo: "Notificações e instalar o app",

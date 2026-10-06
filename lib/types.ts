@@ -72,6 +72,14 @@ export type Category = {
   tipo: TransactionType;
   /** Emoji escolhido para representar a categoria. */
   icone?: string;
+  /**
+   * Cor da categoria: posição na paleta categórica (0-based, ver
+   * CATEGORY_PALETTE — muda de tom com o tema claro/escuro) ou uma cor livre
+   * em hex ("#rrggbb", igual nos dois temas). Uma categoria nova recebe por
+   * padrão uma cor que nenhuma outra usa, mas o usuário pode escolher qualquer
+   * uma, inclusive repetida.
+   */
+  cor?: number | string;
   criadoEm: number;
 };
 

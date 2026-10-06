@@ -28,6 +28,23 @@ export function formatDate(isoDate: string): string {
   return new Date(year, month - 1, day).toLocaleDateString("pt-BR");
 }
 
+/** Data por extenso: "Segunda-feira, 6 de outubro de 2026". */
+export function formatLongDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const label = new Date(year, month - 1, day).toLocaleDateString("pt-BR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/** Momento em que algo foi registrado (timestamp em ms): "06/10/2026, 14:32". */
+export function formatTimestamp(ms: number): string {
+  return new Date(ms).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
 /** Chave yyyy-MM do mês atual, usada para filtrar/agrupar transações. */
 export function currentMonthKey(): string {
   return monthKeyOf(new Date());

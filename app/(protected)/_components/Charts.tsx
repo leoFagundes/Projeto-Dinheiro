@@ -19,7 +19,7 @@ import {
   type TooltipContentProps,
 } from "recharts";
 import { ChevronRight, PieChart as PieChartIcon, TrendingUp, Wallet, type LucideIcon } from "lucide-react";
-import { categoryKey, CATEGORY_PALETTE, FALLBACK_CATEGORY_COLOR, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
+import { categoryColorForSlot, categoryKey, FALLBACK_CATEGORY_COLOR, FALLBACK_CATEGORY_ICON } from "@/lib/categories";
 import { formatCurrency, formatMonthLabel } from "@/lib/format";
 import { EmptyState } from "@/app/_components/EmptyState";
 import { MaskedCurrency } from "@/app/_components/Money";
@@ -106,9 +106,9 @@ function SeriesLegend({ items }: { items: { label: string; color: string; shape:
   );
 }
 
-// Acima de 6 fatias o donut fica ilegível (e as cores começam a se repetir a
-// partir da 9ª categoria) — a cauda vira uma fatia cinza "Demais". A lista
-// embaixo continua com TODAS as categorias, cada uma clicável.
+// Acima de 6 fatias o donut fica ilegível — a cauda vira uma fatia cinza
+// "Demais". A lista embaixo continua com TODAS as categorias, cada uma
+// clicável e com a sua cor.
 const MAX_DONUT_SLICES = 6;
 const DEMAIS_KEY = "__demais__";
 
@@ -289,7 +289,7 @@ export function BreakdownChart({
   const totalGeral = filtered.reduce((sum, item) => sum + item.total, 0);
   // Cor pela posição FIXA do item na lista original (não na filtrada) — um
   // item que zera e some não pode repintar os outros.
-  const colorByLabel = new Map(data.map((item, index) => [item.label, CATEGORY_PALETTE[index % CATEGORY_PALETTE.length]]));
+  const colorByLabel = new Map(data.map((item, index) => [item.label, categoryColorForSlot(index)]));
 
   return (
     <div>
@@ -340,6 +340,59 @@ export function BreakdownChart({
             <span className="flex items-center gap-2">
               <MaskedCurrency value={item.total} />
               <span className="text-xs text-ink-muted">{Math.round((item.total / totalGeral) * 100)}%</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Parte-do-todo numa barra horizontal empilhada (segmentos separados por um
+ * respiro de 2px) + legenda com valor e % — mais fácil de comparar do que um
+ * donut quando são poucos itens. Passar o mouse/dedo destaca o item nos dois.
+ */
+export function ShareBar({ items }: { items: { id: string; label: string; value: number; color: string }[] }) {
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const visible = items.filter((item) => item.value > 0);
+  const total = visible.reduce((sum, item) => sum + item.value, 0);
+  if (total <= 0) return null;
+
+  return (
+    <div>
+      <div className="flex h-3 gap-[2px] overflow-hidden rounded-full" role="img" aria-label="Divisão do total">
+        {visible.map((item) => (
+          <div
+            key={item.id}
+            className="h-full transition-opacity duration-150 first:rounded-l-full last:rounded-r-full"
+            style={{
+              width: `${(item.value / total) * 100}%`,
+              backgroundColor: item.color,
+              opacity: activeId === null || activeId === item.id ? 1 : 0.35,
+            }}
+            onMouseEnter={() => setActiveId(item.id)}
+            onMouseLeave={() => setActiveId(null)}
+          />
+        ))}
+      </div>
+      <ul className="mt-3 flex flex-col gap-1.5">
+        {visible.map((item) => (
+          <li
+            key={item.id}
+            onMouseEnter={() => setActiveId(item.id)}
+            onMouseLeave={() => setActiveId(null)}
+            className={`flex items-center justify-between gap-3 rounded-lg px-1.5 py-0.5 text-sm transition-colors ${
+              activeId === item.id ? "bg-bg" : ""
+            }`}
+          >
+            <span className="flex min-w-0 items-center gap-2 text-ink-muted">
+              <span className="size-2.5 shrink-0 rounded-sm" style={{ backgroundColor: item.color }} />
+              <span className="truncate">{item.label}</span>
+            </span>
+            <span className="flex shrink-0 items-center gap-2">
+              <MaskedCurrency value={item.value} />
+              <span className="w-9 text-right text-xs text-ink-muted">{Math.round((item.value / total) * 100)}%</span>
             </span>
           </li>
         ))}
